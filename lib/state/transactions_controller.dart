@@ -21,6 +21,11 @@ final statsProvider = Provider<SpendingStats>(
   (ref) => SpendingStats(ref.watch(transactionsProvider).value ?? const []),
 );
 
+/// Transactions nobody has confirmed yet: the Quick sort queue.
+final unsortedCountProvider = Provider<int>(
+  (ref) => (ref.watch(transactionsProvider).value ?? const []).where((t) => !t.confirmed).length,
+);
+
 final merchantRulesProvider =
     AsyncNotifierProvider<MerchantRulesController, Map<String, TxCategory>>(MerchantRulesController.new);
 
@@ -98,6 +103,52 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
     await _repo.updateCategory(tx.id, tx.category, confirmed: true);
     _set([for (final t in _current) t.id == tx.id ? t.copyWith(confirmed: true) : t]);
     await ref.read(merchantRulesProvider.notifier).save(tx.merchant, tx.category);
+  }
+
+  /// Quick sort: files [tx] under [category] and confirms it. The change is
+  /// shown at once and written in the background; if the write fails the
+  /// change is rolled back and the error rethrown.
+  ///
+  /// With [remember] (spending only) the rule is learned and every other
+  /// unconfirmed spend from the same merchant is filed the same way.
+  /// Returns how many transactions were updated.
+  Future<int> quickCategorize(Transaction tx, TxCategory category, {bool remember = false}) async {
+    final learn = remember && tx.isOutgoing;
+    final key = Transaction.merchantKey(tx.merchant);
+    final targets = [
+      tx,
+      if (learn)
+        ..._current.where((t) =>
+            t.id != tx.id && !t.confirmed && t.isOutgoing && Transaction.merchantKey(t.merchant) == key),
+    ];
+    final before = {for (final t in targets) t.id: t};
+    _set([
+      for (final t in _current)
+        before.containsKey(t.id)
+            ? t.copyWith(
+                category: category,
+                confirmed: true,
+                aiCategorized: t.aiCategorized && t.category == category,
+              )
+            : t,
+    ]);
+    try {
+      for (var i = 0; i < targets.length; i += 6) {
+        await Future.wait(targets
+            .skip(i)
+            .take(6)
+            .map((t) => _repo.updateCategory(t.id, category, confirmed: true)));
+      }
+      if (tx.aiCategorized && tx.category != category) {
+        await ref.read(localStoreProvider).incrementAiCorrections();
+      }
+      if (learn) await ref.read(merchantRulesProvider.notifier).save(tx.merchant, category);
+      return targets.length;
+    } catch (e) {
+      // Restore only what this call changed; later picks stay as they are.
+      _set([for (final t in _current) before[t.id] ?? t]);
+      throw AppFailure.from(e);
+    }
   }
 
   Future<void> delete(Transaction tx) async {

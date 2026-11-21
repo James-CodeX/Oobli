@@ -12,7 +12,10 @@ import 'package:oobli/data/models/goal.dart';
 import 'package:oobli/data/models/plan.dart';
 import 'package:oobli/data/models/transaction.dart';
 import 'package:oobli/data/models/user_profile.dart';
+import 'package:oobli/core/errors/app_failure.dart';
 import 'package:oobli/core/theme/oobli_colors.dart';
+import 'package:oobli/data/repositories/merchant_rule_repository.dart';
+import 'package:oobli/data/repositories/transaction_repository.dart';
 import 'package:oobli/domain/local_insights.dart';
 import 'package:oobli/domain/spending_stats.dart';
 import 'package:oobli/state/auth_controller.dart';
@@ -180,7 +183,38 @@ class FakeInsights extends InsightsController {
   }
 }
 
-Future<List<Override>> overrides({List<Transaction>? transactions, Plan? plan}) async {
+/// Records category writes; set [fail] to make them throw.
+class FakeTxRepo implements TransactionRepository {
+  final writes = <String, TxCategory>{};
+  bool fail = false;
+
+  @override
+  Future<void> updateCategory(String txId, TxCategory category, {required bool confirmed}) async {
+    await Future<void>.delayed(Duration.zero);
+    if (fail) throw const AppFailure('Network down');
+    writes[txId] = category;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class FakeRuleRepo implements MerchantRuleRepository {
+  final saved = <String, TxCategory>{};
+
+  @override
+  Future<void> save(String userId, String merchant, TxCategory category) async => saved[merchant] = category;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+Future<List<Override>> overrides({
+  List<Transaction>? transactions,
+  Plan? plan,
+  FakeTxRepo? txRepo,
+  FakeRuleRepo? ruleRepo,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final txs = transactions ?? fixtureTransactions();
@@ -192,6 +226,8 @@ Future<List<Override>> overrides({List<Transaction>? transactions, Plan? plan}) 
     goalsProvider.overrideWith(FakeGoals.new),
     planProvider.overrideWith(() => FakePlan(plan)),
     merchantRulesProvider.overrideWith(FakeRules.new),
+    transactionRepositoryProvider.overrideWithValue(txRepo ?? FakeTxRepo()),
+    merchantRuleRepositoryProvider.overrideWithValue(ruleRepo ?? FakeRuleRepo()),
     insightsProvider.overrideWith(FakeInsights.new),
     wrappedProvider.overrideWith((ref) async {
       final stats = SpendingStats(txs);

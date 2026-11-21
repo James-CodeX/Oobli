@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/theme/oobli_colors.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/category.dart';
@@ -13,6 +12,7 @@ import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/oobli_text_field.dart';
 import '../../ui/widgets/pressable.dart';
+import 'transaction_widgets.dart';
 
 /// Opens the add/edit transaction sheet. Pass [tx] to edit.
 Future<void> showTransactionEditor(BuildContext context, {Transaction? tx}) => showModalBottomSheet<void>(
@@ -46,16 +46,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
 
   bool get _editing => widget.tx != null;
 
-  static const _incomeCategories = [
-    TxCategory.income,
-    TxCategory.savings,
-    TxCategory.debt,
-    TxCategory.transfer,
-    TxCategory.other,
-  ];
-
-  List<TxCategory> get _choices =>
-      _direction == TxDirection.inbound ? _incomeCategories : TxCategory.spending;
+  List<TxCategory> get _choices => categoryChoices(_direction);
 
   @override
   void dispose() {
@@ -202,7 +193,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
               runSpacing: Sp.sm,
               children: [
                 for (final cat in _choices)
-                  _CategoryChip(
+                  CategoryChip(
                     category: cat,
                     selected: cat == _category,
                     onTap: () => setState(() => _category = cat),
@@ -340,40 +331,6 @@ class _DirectionToggle extends StatelessWidget {
           option(TxDirection.out, 'Spent', Icons.north_east_rounded),
           option(TxDirection.inbound, 'Received', Icons.south_west_rounded),
         ],
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.category, required this.selected, required this.onTap});
-
-  final TxCategory category;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final color = c.tone(category.tone);
-    return Pressable(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: Motion.fast,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.18) : c.surface,
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(color: selected ? color : c.outline, width: 1.5),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(category.icon, size: 16, color: selected ? color : c.secondaryText),
-            const SizedBox(width: 6),
-            Text(category.label, style: context.text.labelMedium.copyWith(color: c.primaryText)),
-          ],
-        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/oobli_colors.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/models/category.dart';
 import '../../data/models/transaction.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
@@ -205,4 +206,45 @@ class ToneDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ToneTile(icon: icon, tone: tone, size: size, radius: Rad.xs);
+}
+
+/// Categories offered for a transaction going in [direction].
+List<TxCategory> categoryChoices(TxDirection direction) => direction == TxDirection.inbound
+    ? const [TxCategory.income, TxCategory.savings, TxCategory.debt, TxCategory.transfer, TxCategory.other]
+    : TxCategory.spending;
+
+/// Pill with a category icon and label, tinted by the category tone when selected.
+class CategoryChip extends StatelessWidget {
+  const CategoryChip({super.key, required this.category, required this.selected, required this.onTap});
+
+  final TxCategory category;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final color = c.tone(category.tone);
+    return Pressable(
+      onTap: onTap,
+      semanticLabel: category.label,
+      child: AnimatedContainer(
+        duration: Motion.fast,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.18) : c.surface,
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(color: selected ? color : c.outline, width: 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(category.icon, size: 16, color: selected ? color : c.secondaryText),
+            const SizedBox(width: 6),
+            Text(category.label, style: context.text.labelMedium.copyWith(color: c.primaryText)),
+          ],
+        ),
+      ),
+    );
+  }
 }

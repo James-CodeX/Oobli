@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../app/router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
@@ -150,6 +151,13 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                         style: t.titleLarge.copyWith(fontSize: 17, color: c.primaryText)),
                               ),
                             ),
+                            if (!_searching && ref.watch(unsortedCountProvider) > 0)
+                              OobliIconButton(
+                                icon: Icons.bolt_rounded,
+                                tooltip: 'Quick sort',
+                                color: c.primary,
+                                onPressed: () => context.push(Routes.quickSort),
+                              ),
                             OobliIconButton(
                               icon: _searching ? Icons.close_rounded : Icons.search_rounded,
                               tooltip: _searching ? 'Close search' : 'Search',

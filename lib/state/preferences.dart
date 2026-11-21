@@ -23,6 +23,7 @@ class LocalStore {
   static const _aiCorrections = 'ai_corrections';
   static const _dismissedSuggestions = 'dismissed_suggestions';
   static const _session = 'session_profile';
+  static const _quickSortRemember = 'quick_sort_remember';
 
   bool get seenIntro => _prefs.getBool(_seenIntro) ?? false;
   Future<void> setSeenIntro() => _prefs.setBool(_seenIntro, true);
@@ -30,6 +31,10 @@ class LocalStore {
   ThemeMode get themeMode =>
       ThemeMode.values.asNameMap()[_prefs.getString(_themeMode)] ?? ThemeMode.system;
   Future<void> setThemeMode(ThemeMode mode) => _prefs.setString(_themeMode, mode.name);
+
+  /// Quick sort's "Remember for this merchant" switch (on by default).
+  bool get quickSortRemember => _prefs.getBool(_quickSortRemember) ?? true;
+  Future<void> setQuickSortRemember(bool value) => _prefs.setBool(_quickSortRemember, value);
 
   int get aiCorrections => _prefs.getInt(_aiCorrections) ?? 0;
   Future<void> incrementAiCorrections() => _prefs.setInt(_aiCorrections, aiCorrections + 1);

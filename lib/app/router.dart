@@ -14,6 +14,7 @@ import '../features/onboarding/sms_permission_screen.dart';
 import '../features/onboarding/splash_screen.dart';
 import '../features/plans/plans_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/transactions/quick_sort_screen.dart';
 import '../features/wrapped/wrapped_screen.dart';
 import '../state/auth_controller.dart';
 
@@ -30,6 +31,7 @@ abstract final class Routes {
   static const activity = '/activity';
   static const analytics = '/analytics';
   static const settings = '/settings';
+  static const quickSort = '/sort';
 
   static String authWith({required bool login}) => '$auth?mode=${login ? 'login' : 'register'}';
 }
@@ -79,6 +81,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, s) => _slide(s, ActivityScreen(initialQuery: s.uri.queryParameters['q'])),
       ),
       GoRoute(path: Routes.analytics, pageBuilder: (_, s) => _slide(s, const AnalyticsScreen())),
+      GoRoute(path: Routes.quickSort, pageBuilder: (_, s) => _slide(s, const QuickSortScreen())),
       GoRoute(path: Routes.settings, pageBuilder: (_, s) => _slide(s, const SettingsScreen())),
     ],
   );

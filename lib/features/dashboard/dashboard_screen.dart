@@ -92,6 +92,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 data: (list) => list.isEmpty
                     ? [SliverFillRemaining(hasScrollBody: false, child: _EmptyFeed(smsEnabled: profile?.smsSyncEnabled ?? false))]
                     : [
+                        const SliverToBoxAdapter(child: _SortBanner()),
                         const SliverToBoxAdapter(child: _TodayFlowCard()),
                         const SliverToBoxAdapter(child: _DistributionCard()),
                         const SliverToBoxAdapter(child: _RecentList()),
@@ -168,6 +169,46 @@ class _Header extends StatelessWidget {
                 : const SizedBox(width: double.infinity),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Shortcut into Quick sort while transactions are waiting for a category.
+class _SortBanner extends ConsumerWidget {
+  const _SortBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = context.text;
+    final count = ref.watch(unsortedCountProvider);
+    if (count == 0) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
+      child: Pressable(
+        onTap: () => context.push(Routes.quickSort),
+        scale: 0.98,
+        semanticLabel: 'Quick sort $count transactions',
+        child: OobliCard(
+          color: c.primaryContainer,
+          borderColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: Sp.sm + 2),
+          child: Row(
+            children: [
+              Icon(Icons.bolt_rounded, size: 20, color: c.onPrimaryContainer),
+              const SizedBox(width: Sp.sm),
+              Expanded(
+                child: Text(
+                  '$count to sort · one tap each',
+                  style: t.labelLarge.copyWith(color: c.onPrimaryContainer),
+                ),
+              ),
+              Text('Quick sort', style: t.labelLarge.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+              Icon(Icons.chevron_right_rounded, size: 20, color: c.primary),
+            ],
+          ),
+        ),
       ),
     );
   }

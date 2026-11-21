@@ -14,6 +14,7 @@ import 'package:oobli/features/onboarding/sms_permission_screen.dart';
 import 'package:oobli/features/onboarding/splash_screen.dart';
 import 'package:oobli/features/plans/plans_screen.dart';
 import 'package:oobli/features/settings/settings_screen.dart';
+import 'package:oobli/features/transactions/quick_sort_screen.dart';
 import 'package:oobli/features/wrapped/wrapped_screen.dart';
 
 import 'support/fakes.dart';
@@ -90,6 +91,25 @@ void main() {
     expect(find.text('TODAY'), findsOneWidget);
     expect(find.text('Naivas Supermarket'), findsOneWidget);
     expect(find.textContaining('Is this'), findsWidgets);
+  });
+
+  testWidgets('Quick sort: one tap files a transaction and opens the next', (tester) async {
+    final total = fixtureTransactions().length;
+    await render(tester, const QuickSortScreen(), 'quick_sort');
+    expect(find.text('Quick sort'), findsOneWidget);
+    expect(find.text('Remember for this merchant'), findsOneWidget);
+    expect(find.text('$total left'), findsOneWidget);
+    // The newest transaction is open with every spending category.
+    expect(find.text('Skip'), findsOneWidget);
+    expect(find.text('Fees & Charges'), findsOneWidget);
+
+    await tester.tap(find.text('Fees & Charges'));
+    await settle(tester);
+    expect(find.text('${total - 1} left'), findsOneWidget);
+    // Naivas is filed and scrolled away; Mama Mboga Pochi is open next.
+    expect(find.text('Oobli guessed Food & Dining'), findsOneWidget);
+    expect(find.text('Skip'), findsOneWidget);
+    expect(find.text('Fees & Charges'), findsOneWidget);
   });
 
   testWidgets('Analytics', (tester) async {
