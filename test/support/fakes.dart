@@ -186,6 +186,7 @@ Future<List<Override>> overrides({List<Transaction>? transactions, Plan? plan}) 
   final txs = transactions ?? fixtureTransactions();
   return [
     sharedPreferencesProvider.overrideWithValue(prefs),
+    appVersionProvider.overrideWith((ref) async => '1.1.2'),
     authControllerProvider.overrideWith(FakeAuth.new),
     transactionsProvider.overrideWith(() => FakeTransactions(txs)),
     goalsProvider.overrideWith(FakeGoals.new),

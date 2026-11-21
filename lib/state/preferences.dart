@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Overridden in main() with the loaded instance.
@@ -92,3 +93,9 @@ class ThemeModeController extends Notifier<ThemeMode> {
     await ref.read(localStoreProvider).setThemeMode(mode);
   }
 }
+
+/// Installed version, e.g. "1.1.2" (set from the release tag at build time).
+final appVersionProvider = FutureProvider<String>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  return info.version;
+});

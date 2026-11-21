@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../app/router.dart';
-import '../../core/config/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/oobli_colors.dart';
 import '../../core/theme/tokens.dart';
@@ -196,7 +195,7 @@ class SettingsScreen extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(height: Sp.xl),
-                Text('Oobli v${AppConfig.appVersion}', textAlign: TextAlign.center,
+                Text('Oobli v${ref.watch(appVersionProvider).value ?? '…'}', textAlign: TextAlign.center,
                     style: t.labelSmall.copyWith(color: c.secondaryText)),
                 const SizedBox(height: Sp.xs),
                 Text('Made with ❤️ in Nairobi', textAlign: TextAlign.center,

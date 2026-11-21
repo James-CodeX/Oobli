@@ -124,6 +124,7 @@ void main() {
     expect(find.text('Jared Waweru'), findsOneWidget);
     expect(find.text('12 Days'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
+    expect(find.text('Oobli v1.1.2'), findsOneWidget);
   });
 
   testWidgets('Dashboard in light theme', (tester) async {

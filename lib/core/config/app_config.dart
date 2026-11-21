@@ -19,8 +19,6 @@ abstract final class AppConfig {
 
   static const aiFunctionId = 'oobli-ai';
 
-  static const appVersion = '1.0.0';
-
   /// How far back the first SMS sync reaches.
   static const initialSmsLookback = Duration(days: 90);
 
