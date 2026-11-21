@@ -8,6 +8,7 @@ import '../../app/router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
+import '../../state/auth_controller.dart';
 import '../../state/preferences.dart';
 import '../../ui/widgets/mascot.dart';
 import '../../ui/widgets/oobli_button.dart';
@@ -87,10 +88,17 @@ class _MeetOobliScreenState extends ConsumerState<MeetOobliScreen> {
     context.push(Routes.authWith(login: login));
   }
 
+  /// Replaying onboarding while signed in: carry on to the setup steps.
+  void _continue() {
+    _timer?.cancel();
+    context.go(Routes.smsPermission);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
+    final signedIn = ref.watch(authControllerProvider).value != null;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -160,15 +168,19 @@ class _MeetOobliScreenState extends ConsumerState<MeetOobliScreen> {
               const SizedBox(height: Sp.xl),
               ProgressDots(count: _slides.length, active: _index),
               const SizedBox(height: Sp.lg),
-              OobliButton(label: 'Get Started', fullWidth: true, onPressed: () => _go(false)),
-              const SizedBox(height: Sp.md),
-              OobliButton(
-                label: 'I already have an account',
-                variant: OobliButtonVariant.ghost,
-                size: OobliButtonSize.medium,
-                fullWidth: true,
-                onPressed: () => _go(true),
-              ),
+              if (signedIn)
+                OobliButton(label: 'Continue', fullWidth: true, onPressed: _continue)
+              else ...[
+                OobliButton(label: 'Get Started', fullWidth: true, onPressed: () => _go(false)),
+                const SizedBox(height: Sp.md),
+                OobliButton(
+                  label: 'I already have an account',
+                  variant: OobliButtonVariant.ghost,
+                  size: OobliButtonSize.medium,
+                  fullWidth: true,
+                  onPressed: () => _go(true),
+                ),
+              ],
             ],
           ),
         ),

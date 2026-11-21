@@ -166,6 +166,26 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: Sp.lg),
                 const SectionLabel('Support', padding: EdgeInsets.fromLTRB(Sp.xs, 0, Sp.xs, Sp.sm)),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final replay = ref.watch(onboardingReplayProvider).enabled;
+                    return _SettingRow(
+                      icon: Icons.replay_rounded,
+                      tone: Tone.primary,
+                      title: 'Replay onboarding',
+                      subtitle: replay
+                          ? 'Plays next time you open Oobli, then turns off'
+                          : 'Go through the intro and setup again',
+                      trailing: Switch.adaptive(
+                        value: replay,
+                        onChanged: (v) {
+                          ref.read(onboardingReplayProvider.notifier).setEnabled(v);
+                          if (v) showOobliSnack(context, 'Onboarding will play next time you open Oobli');
+                        },
+                      ),
+                    );
+                  },
+                ),
                 _SettingRow(
                   icon: Icons.help_outline_rounded,
                   tone: Tone.neutral,

@@ -24,6 +24,7 @@ class LocalStore {
   static const _dismissedSuggestions = 'dismissed_suggestions';
   static const _session = 'session_profile';
   static const _quickSortRemember = 'quick_sort_remember';
+  static const _replayOnboarding = 'replay_onboarding';
 
   bool get seenIntro => _prefs.getBool(_seenIntro) ?? false;
   Future<void> setSeenIntro() => _prefs.setBool(_seenIntro, true);
@@ -35,6 +36,10 @@ class LocalStore {
   /// Quick sort's "Remember for this merchant" switch (on by default).
   bool get quickSortRemember => _prefs.getBool(_quickSortRemember) ?? true;
   Future<void> setQuickSortRemember(bool value) => _prefs.setBool(_quickSortRemember, value);
+
+  /// Play onboarding again on the next launch (cleared once it's finished).
+  bool get replayOnboarding => _prefs.getBool(_replayOnboarding) ?? false;
+  Future<void> setReplayOnboarding(bool value) => _prefs.setBool(_replayOnboarding, value);
 
   int get aiCorrections => _prefs.getInt(_aiCorrections) ?? 0;
   Future<void> incrementAiCorrections() => _prefs.setInt(_aiCorrections, aiCorrections + 1);
@@ -104,3 +109,42 @@ final appVersionProvider = FutureProvider<String>((ref) async {
   final info = await PackageInfo.fromPlatform();
   return info.version;
 });
+
+/// "Replay onboarding" setting.
+///
+/// [enabled] is the switch in Settings. [active] is whether this run of the
+/// app is replaying: it is read once at launch, so turning the switch on
+/// takes effect next time Oobli opens rather than yanking you out of Settings.
+/// Finishing the flow turns both off.
+@immutable
+class OnboardingReplay {
+  const OnboardingReplay({required this.enabled, required this.active});
+
+  final bool enabled;
+  final bool active;
+}
+
+final onboardingReplayProvider =
+    NotifierProvider<OnboardingReplayController, OnboardingReplay>(OnboardingReplayController.new);
+
+class OnboardingReplayController extends Notifier<OnboardingReplay> {
+  LocalStore get _store => ref.read(localStoreProvider);
+
+  @override
+  OnboardingReplay build() {
+    final on = _store.replayOnboarding;
+    return OnboardingReplay(enabled: on, active: on);
+  }
+
+  Future<void> setEnabled(bool value) async {
+    state = OnboardingReplay(enabled: value, active: state.active);
+    await _store.setReplayOnboarding(value);
+  }
+
+  /// Called when the user completes onboarding.
+  Future<void> finish() async {
+    if (!state.enabled && !state.active) return;
+    state = const OnboardingReplay(enabled: false, active: false);
+    await _store.setReplayOnboarding(false);
+  }
+}

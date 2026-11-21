@@ -30,10 +30,11 @@ void main() {
     String golden, {
     double height = 956,
     bool withPlan = true,
+    bool signedIn = true,
     ThemeMode mode = ThemeMode.dark,
   }) async {
     usePhoneViewport(tester, height: height);
-    await tester.pumpWidget(harness(screen, await overrides(plan: withPlan ? fixturePlan() : null), mode: mode));
+    await tester.pumpWidget(harness(screen, await overrides(plan: withPlan ? fixturePlan() : null, signedIn: signedIn), mode: mode));
     // Decode asset images for real (they load asynchronously in widget tests).
     await tester.runAsync(() async {
       for (final element in find.byType(Image).evaluate()) {
@@ -45,7 +46,7 @@ void main() {
   }
 
   testWidgets('Meet Oobli', (tester) async {
-    await render(tester, const MeetOobliScreen(), 'meet_oobli');
+    await render(tester, const MeetOobliScreen(), 'meet_oobli', signedIn: false);
     expect(find.text('Meet Oobli'), findsOneWidget);
     expect(find.text('Get Started'), findsOneWidget);
     expect(find.text('I already have an account'), findsOneWidget);
@@ -140,7 +141,7 @@ void main() {
   });
 
   testWidgets('Settings & Profile', (tester) async {
-    await render(tester, const SettingsScreen(), 'settings', height: 1320);
+    await render(tester, const SettingsScreen(), 'settings', height: 1400);
     expect(find.text('Jared Waweru'), findsOneWidget);
     expect(find.text('12 Days'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
@@ -159,9 +160,9 @@ void main() {
   });
 
   testWidgets('Light theme screens', (tester) async {
-    await render(tester, const MeetOobliScreen(), 'meet_oobli_light', mode: ThemeMode.light);
+    await render(tester, const MeetOobliScreen(), 'meet_oobli_light', mode: ThemeMode.light, signedIn: false);
     await render(tester, const PlansScreen(), 'plans_light', height: 1450, mode: ThemeMode.light);
-    await render(tester, const SettingsScreen(), 'settings_light', height: 1320, mode: ThemeMode.light);
+    await render(tester, const SettingsScreen(), 'settings_light', height: 1400, mode: ThemeMode.light);
     expect(find.text('Sign Out'), findsOneWidget);
   });
 }

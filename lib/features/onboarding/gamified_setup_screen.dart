@@ -11,6 +11,7 @@ import '../../data/models/goal.dart';
 import '../../data/models/user_profile.dart';
 import '../../state/auth_controller.dart';
 import '../../state/goals_controller.dart';
+import '../../state/preferences.dart';
 import '../../ui/widgets/choice_card.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/mascot.dart';
@@ -36,8 +37,12 @@ class GamifiedSetupScreen extends ConsumerStatefulWidget {
 
 class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
   int _step = 1;
-  FocusGoal _focus = FocusGoal.debt;
-  final _income = TextEditingController();
+  // Replaying from Settings starts from what the user picked last time.
+  late FocusGoal _focus = ref.read(authControllerProvider).value?.focus ?? FocusGoal.debt;
+  late final _income = TextEditingController(text: switch (ref.read(authControllerProvider).value?.monthlyIncome) {
+    final income? when income > 0 => Fmt.number(income.round()),
+    _ => '',
+  });
   final _target = TextEditingController();
   _GoalPreset? _goal;
   bool _saving = false;
@@ -110,6 +115,7 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
             monthlyIncome: income,
             onboardingComplete: true,
           ));
+      await ref.read(onboardingReplayProvider.notifier).finish();
       if (mounted) context.go(Routes.plans);
     } catch (e) {
       if (mounted) {

@@ -17,6 +17,7 @@ import '../features/settings/settings_screen.dart';
 import '../features/transactions/quick_sort_screen.dart';
 import '../features/wrapped/wrapped_screen.dart';
 import '../state/auth_controller.dart';
+import '../state/preferences.dart';
 
 abstract final class Routes {
   static const splash = '/';
@@ -39,6 +40,7 @@ abstract final class Routes {
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
   ref.listen(authControllerProvider, (_, _) => refresh.value++);
+  ref.listen(onboardingReplayProvider.select((r) => r.active), (_, _) => refresh.value++);
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
@@ -55,6 +57,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isPublic = loc == Routes.welcome || loc == Routes.auth;
       if (user == null) return isPublic ? null : Routes.welcome;
       if (!user.onboardingComplete) return loc.startsWith('/onboarding') ? null : Routes.smsPermission;
+      // Replaying from Settings: intro carousel, then the onboarding steps.
+      if (ref.read(onboardingReplayProvider).active) {
+        return loc == Routes.welcome || loc.startsWith('/onboarding') ? null : Routes.welcome;
+      }
       if (loc == Routes.splash || isPublic) return Routes.feed;
       return null;
     },

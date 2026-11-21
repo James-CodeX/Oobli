@@ -126,6 +126,11 @@ class FakeAuth extends AuthController {
   Future<UserProfile?> build() async => profile;
 }
 
+class FakeSignedOut extends AuthController {
+  @override
+  Future<UserProfile?> build() async => null;
+}
+
 class FakeTransactions extends TransactionsController {
   FakeTransactions(this.items);
   final List<Transaction> items;
@@ -214,14 +219,16 @@ Future<List<Override>> overrides({
   Plan? plan,
   FakeTxRepo? txRepo,
   FakeRuleRepo? ruleRepo,
+  Map<String, Object> prefs = const {},
+  bool signedIn = true,
 }) async {
-  SharedPreferences.setMockInitialValues({});
-  final prefs = await SharedPreferences.getInstance();
+  SharedPreferences.setMockInitialValues(prefs);
+  final store = await SharedPreferences.getInstance();
   final txs = transactions ?? fixtureTransactions();
   return [
-    sharedPreferencesProvider.overrideWithValue(prefs),
+    sharedPreferencesProvider.overrideWithValue(store),
     appVersionProvider.overrideWith((ref) async => '1.1.2'),
-    authControllerProvider.overrideWith(FakeAuth.new),
+    authControllerProvider.overrideWith(signedIn ? FakeAuth.new : FakeSignedOut.new),
     transactionsProvider.overrideWith(() => FakeTransactions(txs)),
     goalsProvider.overrideWith(FakeGoals.new),
     planProvider.overrideWith(() => FakePlan(plan)),
@@ -258,6 +265,7 @@ Future<void> loadFonts() async {
 
 /// Wraps [child] in the app theme (dark, like the designs) and provider scope.
 Widget harness(Widget child, List<Override> overrides, {ThemeMode mode = ThemeMode.dark}) => ProviderScope(
+      key: UniqueKey(), // fresh providers per render, even within one test
       overrides: overrides,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
