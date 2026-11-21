@@ -1,0 +1,3 @@
+tags:
+  golden:
+    description: Pixel snapshot tests; rendering differs across machines, so CI skips them.

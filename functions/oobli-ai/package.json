@@ -1,0 +1,13 @@
+{
+  "name": "oobli-ai",
+  "version": "1.0.0",
+  "description": "Oobli AI gateway: Gemini-powered categorisation, SMS parsing, insights, plans and chat.",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
