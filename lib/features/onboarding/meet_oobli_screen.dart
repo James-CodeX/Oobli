@@ -119,16 +119,16 @@ class _MeetOobliScreenState extends ConsumerState<MeetOobliScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
                                 const SizedBox(height: Sp.lg),
-                                OobliMascot(size: 160, mood: s.mood),
+                                OobliMascot(size: 136, mood: s.mood),
                                 const SizedBox(height: Sp.xl),
                                 Text(
                                   s.title,
                                   textAlign: TextAlign.center,
-                                  style: t.headlineLarge.copyWith(fontWeight: FontWeight.w900),
+                                  style: t.headlineLarge.copyWith(fontWeight: FontWeight.w800),
                                 ),
                                 const SizedBox(height: Sp.md),
                                 ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 300),
+                                  constraints: const BoxConstraints(maxWidth: 330),
                                   child: Text(
                                     s.body,
                                     textAlign: TextAlign.center,
@@ -139,8 +139,8 @@ class _MeetOobliScreenState extends ConsumerState<MeetOobliScreen> {
                                 OobliSaysCard(
                                   message: s.says,
                                   leading: Container(
-                                    width: 48,
-                                    height: 48,
+                                    width: 40,
+                                    height: 40,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: c.success.withValues(alpha: 0.25),

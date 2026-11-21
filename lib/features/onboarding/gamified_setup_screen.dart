@@ -147,11 +147,11 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
               Row(
                 children: [
                   Container(
-                    width: 64,
-                    height: 64,
+                    width: 52,
+                    height: 52,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: c.accent.withValues(alpha: 0.25)),
-                    child: OobliMascot(size: 40, glow: false, mood: _step == 3 ? MascotMood.joy : MascotMood.happy),
+                    child: OobliMascot(size: 32, glow: false, mood: _step == 3 ? MascotMood.joy : MascotMood.happy),
                   ),
                   const SizedBox(width: Sp.md),
                   Expanded(

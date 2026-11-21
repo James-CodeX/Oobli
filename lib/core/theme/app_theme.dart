@@ -35,7 +35,7 @@ abstract final class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: c.background,
       canvasColor: c.background,
-      fontFamily: OobliFonts.secondary,
+      fontFamily: OobliFonts.family,
       splashFactory: InkSparkle.splashFactory,
       dividerColor: c.divider,
       extensions: [c, text],

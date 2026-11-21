@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,13 +9,45 @@ import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../domain/spending_stats.dart';
 
+/// Short axis/tooltip money label: "12.4k", "850", "1.2M".
+String _short(double v) {
+  final a = v.abs();
+  if (a >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+  if (a >= 10000) return '${(v / 1000).toStringAsFixed(0)}k';
+  if (a >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
+  return v.toStringAsFixed(0);
+}
+
+/// Rounds [v] up to a "nice" axis maximum (1, 2, 2.5, 5 × 10^n).
+double _niceMax(double v) {
+  if (v <= 0) return 1;
+  final exp = math.pow(10, (math.log(v) / math.ln10).floor()).toDouble();
+  for (final m in const [1.0, 2.0, 2.5, 5.0, 10.0]) {
+    if (m * exp >= v) return m * exp;
+  }
+  return 10 * exp;
+}
+
+void _dashedLine(Canvas canvas, Offset a, Offset b, Paint paint, {double dash = 4, double gap = 4}) {
+  final total = (b - a).distance;
+  final dir = (b - a) / total;
+  for (double d = 0; d < total; d += dash + gap) {
+    canvas.drawLine(a + dir * d, a + dir * math.min(d + dash, total), paint);
+  }
+}
+
+TextPainter _text(String s, TextStyle style) =>
+    TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)..layout();
+
 // ---------------------------------------------------------------------------
 // Bar chart ("Today's Flow")
 // ---------------------------------------------------------------------------
 
-/// Animated vertical bars with weekday labels. Tapping a bar reveals its value.
+/// Slim capsule bars on soft tracks. The last bar (today) is highlighted with
+/// a glow and value pill; tap any bar to inspect it. A dashed line marks the
+/// average day.
 class FlowBarChart extends StatefulWidget {
-  const FlowBarChart({super.key, required this.points, this.height = 120, this.color});
+  const FlowBarChart({super.key, required this.points, this.height = 132, this.color});
 
   final List<SeriesPoint> points;
   final double height;
@@ -24,92 +57,177 @@ class FlowBarChart extends StatefulWidget {
   State<FlowBarChart> createState() => _FlowBarChartState();
 }
 
-class _FlowBarChartState extends State<FlowBarChart> {
-  /// Headroom for the bouncy grow-in curve so bars never overflow.
-  static const _overshoot = 1.12;
-
+class _FlowBarChartState extends State<FlowBarChart> with SingleTickerProviderStateMixin {
+  late final AnimationController _grow =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
   int? _selected;
+
+  @override
+  void didUpdateWidget(FlowBarChart old) {
+    super.didUpdateWidget(old);
+    if (old.points.length != widget.points.length) _selected = null;
+  }
+
+  @override
+  void dispose() {
+    _grow.dispose();
+    super.dispose();
+  }
+
+  void _tap(Offset local, double width) {
+    final n = widget.points.length;
+    if (n == 0) return;
+    final i = (local.dx / (width / n)).floor().clamp(0, n - 1);
+    HapticFeedback.selectionClick();
+    setState(() => _selected = _selected == i ? null : i);
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
-    final maxV = widget.points.fold<double>(0, (m, p) => math.max(m, p.value));
-    const labelH = 18.0;
-    const valueH = 18.0;
-
-    return SizedBox(
-      height: widget.height + valueH,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (var i = 0; i < widget.points.length; i++)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _selected = _selected == i ? null : i);
-                },
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    SizedBox(
-                      height: valueH,
-                      child: AnimatedOpacity(
-                        opacity: _selected == i ? 1 : 0,
-                        duration: Motion.fast,
-                        child: FittedBox(
-                          child: Text(
-                            Fmt.compactKes(widget.points[i].value),
-                            style: t.labelSmall.copyWith(color: c.primaryText),
-                          ),
-                        ),
-                      ),
-                    ),
-                    TweenAnimationBuilder<double>(
-                      key: ValueKey('${widget.points.length}-$i-${widget.points[i].value}'),
-                      tween: Tween(begin: 0, end: maxV <= 0 ? 0 : widget.points[i].value / maxV),
-                      duration: Duration(milliseconds: 500 + i * 60),
-                      curve: Motion.emphasized,
-                      builder: (context, v, _) => Container(
-                        width: 24,
-                        height: math.max(4, (widget.height - labelH - Sp.xs) / _overshoot * v.clamp(0, _overshoot)),
-                        decoration: BoxDecoration(
-                          color: widget.points[i].value <= 0
-                              ? c.divider
-                              : (_selected == null || _selected == i
-                                  ? widget.color ?? c.primary
-                                  : (widget.color ?? c.primary).withValues(alpha: 0.4)),
-                          borderRadius: Rad.all(Rad.xs),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: Sp.xs),
-                    SizedBox(
-                      height: labelH,
-                      child: Text(
-                        widget.points[i].label,
-                        style: t.labelSmall.copyWith(color: c.secondaryText),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    return LayoutBuilder(
+      builder: (context, box) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (d) => _tap(d.localPosition, box.maxWidth),
+        child: AnimatedBuilder(
+          animation: _grow,
+          builder: (context, _) => CustomPaint(
+            size: Size(box.maxWidth, widget.height),
+            painter: _BarPainter(
+              points: widget.points,
+              progress: Curves.easeOutCubic.transform(_grow.value),
+              highlight: _selected ?? widget.points.length - 1,
+              color: widget.color ?? c.primary,
+              track: c.surfaceVariant.withValues(alpha: 0.35),
+              guide: c.secondaryText.withValues(alpha: 0.35),
+              pillColor: c.primaryText,
+              pillText: t.labelSmall.copyWith(color: c.background, fontWeight: FontWeight.w600),
+              labelStyle: t.labelSmall.copyWith(color: c.secondaryText),
+              activeLabelStyle: t.labelSmall.copyWith(color: c.primaryText, fontWeight: FontWeight.w700),
+              avgStyle: t.labelSmall.copyWith(color: c.secondaryText, fontSize: 9),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
+}
+
+class _BarPainter extends CustomPainter {
+  _BarPainter({
+    required this.points,
+    required this.progress,
+    required this.highlight,
+    required this.color,
+    required this.track,
+    required this.guide,
+    required this.pillColor,
+    required this.pillText,
+    required this.labelStyle,
+    required this.activeLabelStyle,
+    required this.avgStyle,
+  });
+
+  final List<SeriesPoint> points;
+  final double progress;
+  final int highlight;
+  final Color color;
+  final Color track;
+  final Color guide;
+  final Color pillColor;
+  final TextStyle pillText;
+  final TextStyle labelStyle;
+  final TextStyle activeLabelStyle;
+  final TextStyle avgStyle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    const labelH = 18.0;
+    const pillH = 20.0;
+    const barW = 12.0;
+    final top = pillH + 6;
+    final chartH = size.height - labelH - top;
+    final maxV = points.map((p) => p.value).fold<double>(0, math.max);
+    final slot = size.width / points.length;
+    final bottom = top + chartH;
+
+    // Average guide.
+    final avg = points.fold<double>(0, (s, p) => s + p.value) / points.length;
+    if (maxV > 0 && avg > 0) {
+      final y = bottom - chartH * (avg / maxV);
+      _dashedLine(canvas, Offset(0, y), Offset(size.width - 22, y), Paint()..color = guide..strokeWidth = 1);
+      _text('avg', avgStyle).paint(canvas, Offset(size.width - 18, y - 6));
+    }
+
+    for (var i = 0; i < points.length; i++) {
+      final cx = slot * i + slot / 2;
+      final active = i == highlight;
+      final trackRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx - barW / 2, top, barW, chartH),
+        const Radius.circular(barW / 2),
+      );
+      canvas.drawRRect(trackRect, Paint()..color = track);
+
+      final ratio = maxV <= 0 ? 0.0 : points[i].value / maxV;
+      // Stagger each bar's growth slightly for a cascading entrance.
+      final local = ((progress - i * 0.05) / (1 - points.length * 0.05)).clamp(0.0, 1.0);
+      final h = math.max(points[i].value > 0 ? barW : 0.0, chartH * ratio * local);
+      if (h > 0) {
+        final rect = Rect.fromLTWH(cx - barW / 2, bottom - h, barW, h);
+        final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(barW / 2));
+        if (active) {
+          canvas.drawRRect(
+            rrect.inflate(1),
+            Paint()
+              ..color = color.withValues(alpha: 0.45)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+          );
+        }
+        canvas.drawRRect(
+          rrect,
+          Paint()
+            ..shader = ui.Gradient.linear(
+              rect.topCenter,
+              rect.bottomCenter,
+              active
+                  ? [color, color.withValues(alpha: 0.75)]
+                  : [color.withValues(alpha: 0.55), color.withValues(alpha: 0.25)],
+            ),
+        );
+      }
+
+      if (active && points[i].value > 0 && progress > 0.6) {
+        final tp = _text(_short(points[i].value), pillText);
+        final w = tp.width + 12;
+        final left = (cx - w / 2).clamp(0.0, size.width - w);
+        final pillTop = math.max(0.0, bottom - h - pillH - 6);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(left, pillTop, w, pillH), const Radius.circular(pillH / 2)),
+          Paint()..color = pillColor.withValues(alpha: ((progress - 0.6) / 0.4).clamp(0, 1)),
+        );
+        tp.paint(canvas, Offset(left + 6, pillTop + (pillH - tp.height) / 2));
+      }
+
+      final label = _text(points[i].label, active ? activeLabelStyle : labelStyle);
+      label.paint(canvas, Offset(cx - label.width / 2, bottom + 6));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BarPainter old) =>
+      old.progress != progress || old.highlight != highlight || old.points != points || old.color != color;
 }
 
 // ---------------------------------------------------------------------------
 // Line chart ("Spending Flow")
 // ---------------------------------------------------------------------------
 
-/// Smooth filled line chart that draws itself in; drag to scrub values.
+/// Smooth monotone area chart (never overshoots below zero) with dashed
+/// gridlines, a glowing stroke and a draggable tooltip.
 class FlowLineChart extends StatefulWidget {
-  const FlowLineChart({super.key, required this.points, this.height = 200});
+  const FlowLineChart({super.key, required this.points, this.height = 190});
 
   final List<SeriesPoint> points;
   final double height;
@@ -120,24 +238,20 @@ class FlowLineChart extends StatefulWidget {
 
 class _FlowLineChartState extends State<FlowLineChart> with SingleTickerProviderStateMixin {
   late final AnimationController _draw =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..forward();
   int? _selected;
+
+  static const _gutter = 30.0;
 
   @override
   void didUpdateWidget(FlowLineChart old) {
     super.didUpdateWidget(old);
-    if (old.points.length != widget.points.length ||
-        !_sameValues(old.points, widget.points)) {
+    final changed = old.points.length != widget.points.length ||
+        [for (var i = 0; i < old.points.length; i++) old.points[i].value != widget.points[i].value].any((x) => x);
+    if (changed) {
       _selected = null;
       _draw.forward(from: 0);
     }
-  }
-
-  static bool _sameValues(List<SeriesPoint> a, List<SeriesPoint> b) {
-    for (var i = 0; i < a.length; i++) {
-      if (a[i].value != b[i].value) return false;
-    }
-    return true;
   }
 
   @override
@@ -147,9 +261,10 @@ class _FlowLineChartState extends State<FlowLineChart> with SingleTickerProvider
   }
 
   void _select(Offset local, double width) {
-    if (widget.points.length < 2) return;
-    final step = width / (widget.points.length - 1);
-    final i = (local.dx / step).round().clamp(0, widget.points.length - 1);
+    final n = widget.points.length;
+    if (n < 2) return;
+    final step = (width - _gutter) / (n - 1);
+    final i = ((local.dx - _gutter) / step).round().clamp(0, n - 1);
     if (i != _selected) {
       HapticFeedback.selectionClick();
       setState(() => _selected = i);
@@ -160,156 +275,208 @@ class _FlowLineChartState extends State<FlowLineChart> with SingleTickerProvider
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
-    const labelH = 24.0;
-
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        return GestureDetector(
-          onPanDown: (d) => _select(d.localPosition, width),
-          onPanUpdate: (d) => _select(d.localPosition, width),
-          onPanEnd: (_) => setState(() => _selected = null),
-          onTapUp: (_) => setState(() => _selected = null),
-          child: SizedBox(
-            height: widget.height,
-            child: Column(
-              children: [
-                Expanded(
-                  child: AnimatedBuilder(
-                    animation: _draw,
-                    builder: (context, _) => CustomPaint(
-                      size: Size.infinite,
-                      painter: _LinePainter(
-                        values: [for (final p in widget.points) p.value],
-                        progress: Curves.easeOutCubic.transform(_draw.value),
-                        line: c.primary,
-                        fill: c.primary,
-                        dotBorder: c.surface,
-                        guide: c.divider,
-                        selected: _selected,
-                        bubbleColor: c.surfaceVariant,
-                        bubbleText: t.labelMedium.copyWith(color: c.primaryText),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: labelH,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (final p in widget.points)
-                        Text(p.label, style: t.labelSmall.copyWith(color: c.secondaryText)),
-                    ],
-                  ),
-                ),
-              ],
+      builder: (context, box) => GestureDetector(
+        onPanDown: (d) => _select(d.localPosition, box.maxWidth),
+        onPanUpdate: (d) => _select(d.localPosition, box.maxWidth),
+        onPanEnd: (_) => setState(() => _selected = null),
+        onTapUp: (_) => setState(() => _selected = null),
+        child: AnimatedBuilder(
+          animation: _draw,
+          builder: (context, _) => CustomPaint(
+            size: Size(box.maxWidth, widget.height),
+            painter: _LinePainter(
+              points: widget.points,
+              progress: Curves.easeInOutCubic.transform(_draw.value),
+              selected: _selected,
+              gutter: _gutter,
+              line: c.primary,
+              lineEnd: Color.lerp(c.primary, c.accent, 0.55)!,
+              surface: c.surface,
+              grid: c.outline,
+              axisStyle: t.labelSmall.copyWith(color: c.hint, fontSize: 9),
+              labelStyle: t.labelSmall.copyWith(color: c.secondaryText),
+              activeLabelStyle: t.labelSmall.copyWith(color: c.primaryText, fontWeight: FontWeight.w700),
+              bubbleColor: c.primaryText,
+              bubbleTitle: t.labelSmall.copyWith(color: c.background.withValues(alpha: 0.7)),
+              bubbleValue: t.labelMedium.copyWith(color: c.background, fontWeight: FontWeight.w700),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
 class _LinePainter extends CustomPainter {
   _LinePainter({
-    required this.values,
+    required this.points,
     required this.progress,
-    required this.line,
-    required this.fill,
-    required this.dotBorder,
-    required this.guide,
     required this.selected,
+    required this.gutter,
+    required this.line,
+    required this.lineEnd,
+    required this.surface,
+    required this.grid,
+    required this.axisStyle,
+    required this.labelStyle,
+    required this.activeLabelStyle,
     required this.bubbleColor,
-    required this.bubbleText,
+    required this.bubbleTitle,
+    required this.bubbleValue,
   });
 
-  final List<double> values;
+  final List<SeriesPoint> points;
   final double progress;
-  final Color line;
-  final Color fill;
-  final Color dotBorder;
-  final Color guide;
   final int? selected;
+  final double gutter;
+  final Color line;
+  final Color lineEnd;
+  final Color surface;
+  final Color grid;
+  final TextStyle axisStyle;
+  final TextStyle labelStyle;
+  final TextStyle activeLabelStyle;
   final Color bubbleColor;
-  final TextStyle bubbleText;
+  final TextStyle bubbleTitle;
+  final TextStyle bubbleValue;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (values.length < 2) return;
-    const top = 28.0;
-    const dotR = 5.0;
-    final maxV = values.reduce(math.max);
-    final h = size.height - top - dotR;
-    final step = size.width / (values.length - 1);
-    final pts = [
-      for (var i = 0; i < values.length; i++)
-        Offset(i * step, top + h - (maxV <= 0 ? 0 : values[i] / maxV) * h),
-    ];
+    if (points.length < 2) return;
+    const labelH = 20.0;
+    const top = 34.0; // room for the tooltip
+    final bottom = size.height - labelH;
+    final h = bottom - top;
+    final left = gutter;
+    final w = size.width - left - 6;
+    final maxV = _niceMax(points.map((p) => p.value).fold<double>(0, math.max));
+    final step = w / (points.length - 1);
 
-    // Smooth curve through all points (Catmull-Rom converted to cubic Béziers).
-    final path = Path()..moveTo(pts.first.dx, pts.first.dy);
-    for (var i = 0; i < pts.length - 1; i++) {
-      final p0 = i == 0 ? pts[i] : pts[i - 1];
-      final p1 = pts[i];
-      final p2 = pts[i + 1];
-      final p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-      final c1 = p1 + (p2 - p0) / 6;
-      final c2 = p2 - (p3 - p1) / 6;
-      path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
+    // Gridlines + axis labels (0, half, max).
+    final gridPaint = Paint()
+      ..color = grid
+      ..strokeWidth = 1;
+    for (final f in const [0.0, 0.5, 1.0]) {
+      final y = bottom - h * f;
+      _dashedLine(canvas, Offset(left, y), Offset(size.width, y), gridPaint, dash: 3, gap: 5);
+      final tp = _text(_short(maxV * f), axisStyle);
+      tp.paint(canvas, Offset(0, y - tp.height / 2));
     }
 
+    final pts = [
+      for (var i = 0; i < points.length; i++) Offset(left + i * step, bottom - h * (points[i].value / maxV)),
+    ];
+    final path = _monotonePath(pts);
+
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(-dotR, 0, size.width * progress + dotR * 2, size.height));
+    canvas.clipRect(Rect.fromLTWH(0, 0, left + w * progress + 8, size.height));
 
     final area = Path.from(path)
-      ..lineTo(pts.last.dx, size.height)
-      ..lineTo(pts.first.dx, size.height)
+      ..lineTo(pts.last.dx, bottom)
+      ..lineTo(pts.first.dx, bottom)
       ..close();
     canvas.drawPath(
       area,
       Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [fill.withValues(alpha: 0.22), fill.withValues(alpha: 0.04)],
-        ).createShader(Offset.zero & size),
+        ..shader = ui.Gradient.linear(
+          Offset(0, top),
+          Offset(0, bottom),
+          [line.withValues(alpha: 0.32), line.withValues(alpha: 0.0)],
+        ),
     );
+
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..shader = ui.Gradient.linear(pts.first, pts.last, [line, lineEnd]);
+    // Soft glow under the crisp line.
     canvas.drawPath(
       path,
       Paint()
-        ..color = line
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
+        ..strokeWidth = 6
+        ..color = line.withValues(alpha: 0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
-    for (final p in pts) {
-      canvas.drawCircle(p, dotR, Paint()..color = line);
-    }
+    canvas.drawPath(path, stroke..strokeWidth = 2.6);
     canvas.restore();
 
-    if (selected != null) {
-      final p = pts[selected!];
-      canvas.drawLine(Offset(p.dx, top), Offset(p.dx, size.height), Paint()..color = guide..strokeWidth = 1.5);
-      canvas.drawCircle(p, dotR + 3, Paint()..color = dotBorder);
-      canvas.drawCircle(p, dotR + 1, Paint()..color = line);
-
-      final tp = TextPainter(
-        text: TextSpan(text: Fmt.compactKes(values[selected!]), style: bubbleText),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final bw = tp.width + 16;
-      final left = (p.dx - bw / 2).clamp(0.0, size.width - bw);
-      final rect = RRect.fromRectAndRadius(Rect.fromLTWH(left, 0, bw, 22), const Radius.circular(6));
-      canvas.drawRRect(rect, Paint()..color = bubbleColor);
-      tp.paint(canvas, Offset(left + 8, 11 - tp.height / 2));
+    // End point: ringed dot with halo (once the line has drawn in).
+    if (progress > 0.98 && selected == null) {
+      final p = pts.last;
+      canvas.drawCircle(p, 9, Paint()..color = lineEnd.withValues(alpha: 0.2));
+      canvas.drawCircle(p, 5, Paint()..color = surface);
+      canvas.drawCircle(p, 3.5, Paint()..color = lineEnd);
     }
+
+    for (var i = 0; i < points.length; i++) {
+      final tp = _text(points[i].label, i == selected ? activeLabelStyle : labelStyle);
+      final x = (pts[i].dx - tp.width / 2).clamp(left - 4, size.width - tp.width);
+      tp.paint(canvas, Offset(x, bottom + 6));
+    }
+
+    final s = selected;
+    if (s != null) {
+      final p = pts[s];
+      _dashedLine(canvas, Offset(p.dx, top - 4), Offset(p.dx, bottom), Paint()..color = grid..strokeWidth = 1.2);
+      canvas.drawCircle(p, 7, Paint()..color = surface);
+      canvas.drawCircle(p, 5, Paint()..color = line);
+
+      final title = _text(points[s].label, bubbleTitle);
+      final value = _text(Fmt.kes(points[s].value), bubbleValue);
+      final bw = math.max(title.width, value.width) + 16;
+      final bh = title.height + value.height + 8;
+      final bx = (p.dx - bw / 2).clamp(0.0, size.width - bw);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(bx, 0, bw, bh), const Radius.circular(8)),
+        Paint()..color = bubbleColor,
+      );
+      title.paint(canvas, Offset(bx + 8, 4));
+      value.paint(canvas, Offset(bx + 8, 4 + title.height));
+    }
+  }
+
+  /// Fritsch–Carlson monotone cubic: smooth, but never overshoots the data
+  /// (so spending can't appear to dip below zero between points).
+  static Path _monotonePath(List<Offset> p) {
+    final n = p.length;
+    final path = Path()..moveTo(p[0].dx, p[0].dy);
+    final dx = List<double>.generate(n - 1, (i) => p[i + 1].dx - p[i].dx);
+    final slope = List<double>.generate(n - 1, (i) => (p[i + 1].dy - p[i].dy) / dx[i]);
+    final m = List<double>.filled(n, 0);
+    m[0] = slope[0];
+    m[n - 1] = slope[n - 2];
+    for (var i = 1; i < n - 1; i++) {
+      m[i] = slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
+    }
+    for (var i = 0; i < n - 1; i++) {
+      if (slope[i] == 0) {
+        m[i] = 0;
+        m[i + 1] = 0;
+        continue;
+      }
+      final a = m[i] / slope[i];
+      final b = m[i + 1] / slope[i];
+      final r = a * a + b * b;
+      if (r > 9) {
+        final tau = 3 / math.sqrt(r);
+        m[i] = tau * a * slope[i];
+        m[i + 1] = tau * b * slope[i];
+      }
+    }
+    for (var i = 0; i < n - 1; i++) {
+      final h = dx[i] / 3;
+      path.cubicTo(p[i].dx + h, p[i].dy + m[i] * h, p[i + 1].dx - h, p[i + 1].dy - m[i + 1] * h, p[i + 1].dx,
+          p[i + 1].dy);
+    }
+    return path;
   }
 
   @override
   bool shouldRepaint(_LinePainter old) =>
-      old.progress != progress || old.selected != selected || old.values != values || old.line != line;
+      old.progress != progress || old.selected != selected || old.points != points || old.line != line;
 }
 
 // ---------------------------------------------------------------------------
@@ -327,115 +494,193 @@ class DonutSlice {
 
 enum LegendPosition { right, bottom }
 
-/// Thick donut with gaps between segments, sweeping in clockwise from 12 o'clock.
-class DonutChart extends StatelessWidget {
+/// Slim donut with rounded, gapped segments on a soft track. The centre shows
+/// [centerValue]/[centerLabel]; tapping a segment (or legend row) focuses it.
+class DonutChart extends StatefulWidget {
   const DonutChart({
     super.key,
     required this.slices,
-    this.size = 180,
+    this.size = 140,
     this.legend = LegendPosition.right,
-    this.center,
+    this.centerValue,
+    this.centerLabel,
   });
 
   final List<DonutSlice> slices;
   final double size;
   final LegendPosition legend;
-  final Widget? center;
+  final String? centerValue;
+  final String? centerLabel;
+
+  @override
+  State<DonutChart> createState() => _DonutChartState();
+}
+
+class _DonutChartState extends State<DonutChart> {
+  int? _focus;
+
+  double get _total => widget.slices.fold<double>(0, (s, x) => s + x.value);
+
+  void _toggle(int i) {
+    HapticFeedback.selectionClick();
+    setState(() => _focus = _focus == i ? null : i);
+  }
+
+  void _tapRing(Offset local) {
+    final center = Offset(widget.size / 2, widget.size / 2);
+    final v = local - center;
+    final r = v.distance;
+    if (r < widget.size * 0.28 || r > widget.size * 0.52 || _total <= 0) return;
+    var angle = math.atan2(v.dy, v.dx) + math.pi / 2;
+    if (angle < 0) angle += 2 * math.pi;
+    var acc = 0.0;
+    for (var i = 0; i < widget.slices.length; i++) {
+      acc += widget.slices[i].value / _total * 2 * math.pi;
+      if (angle <= acc) return _toggle(i);
+    }
+  }
+
+  static String _pct(double ratio) {
+    final v = ratio * 100;
+    return v >= 10 || v == v.roundToDouble() ? '${v.round()}%' : '${v.toStringAsFixed(1)}%';
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final total = slices.fold<double>(0, (s, x) => s + x.value);
-    final ring = TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeOutCubic,
-      builder: (context, v, child) => CustomPaint(
-        size: Size.square(size),
-        painter: _DonutPainter(
-          values: [for (final s in slices) s.value],
-          colors: [for (final s in slices) s.color],
-          progress: v,
-          gapColor: c.surface,
-          empty: c.divider,
+    final t = context.text;
+    final total = _total;
+    final f = _focus;
+    final value = f == null ? widget.centerValue : _pct(total <= 0 ? 0 : widget.slices[f].value / total);
+    final label = f == null ? widget.centerLabel : widget.slices[f].label;
+
+    final ring = GestureDetector(
+      onTapUp: (d) => _tapRing(d.localPosition),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 1100),
+        curve: Curves.easeOutCubic,
+        builder: (context, v, child) => CustomPaint(
+          size: Size.square(widget.size),
+          painter: _DonutPainter(
+            values: [for (final s in widget.slices) s.value],
+            colors: [for (final s in widget.slices) s.color],
+            progress: v,
+            focus: f,
+            track: c.surfaceVariant.withValues(alpha: 0.35),
+          ),
+          child: child,
         ),
-        child: child,
+        child: SizedBox.square(
+          dimension: widget.size,
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: Motion.fast,
+              child: Column(
+                key: ValueKey('$value$label'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (value != null)
+                    Text(value, style: t.titleMedium.copyWith(fontWeight: FontWeight.w700, height: 1.1)),
+                  if (label != null)
+                    SizedBox(
+                      width: widget.size * 0.55,
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.labelSmall.copyWith(color: c.secondaryText),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      child: SizedBox.square(dimension: size, child: Center(child: center)),
     );
 
-    final legendItems = [
-      for (final s in slices)
+    final rows = [
+      for (final (i, s) in widget.slices.indexed)
         _LegendRow(
           color: s.color,
           label: s.label,
           value: total <= 0 ? '0%' : _pct(s.value / total),
+          dimmed: f != null && f != i,
+          onTap: () => _toggle(i),
         ),
     ];
 
-    if (legend == LegendPosition.bottom) {
+    if (widget.legend == LegendPosition.bottom) {
       return Column(
         children: [
           ring,
           const SizedBox(height: Sp.md),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: Sp.md,
-            runSpacing: Sp.sm,
-            children: legendItems,
-          ),
+          Wrap(alignment: WrapAlignment.center, spacing: Sp.lg, runSpacing: Sp.xs, children: rows),
         ],
       );
     }
     return Row(
       children: [
         ring,
-        const SizedBox(width: Sp.lg),
+        const SizedBox(width: Sp.xl),
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final item in legendItems)
-                Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: item),
+              for (final r in rows) Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: r),
             ],
           ),
         ),
       ],
     );
   }
-
-  static String _pct(double ratio) {
-    final v = ratio * 100;
-    return v == v.roundToDouble() || v >= 10 ? '${v.round()}%' : '${v.toStringAsFixed(1)}%';
-  }
 }
 
 class _LegendRow extends StatelessWidget {
-  const _LegendRow({required this.color, required this.label, required this.value});
+  const _LegendRow({
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.dimmed,
+    required this.onTap,
+  });
 
   final Color color;
   final String label;
   final String value;
+  final bool dimmed;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final t = context.text;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 9, height: 9, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: Sp.sm),
-        Flexible(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: t.labelMedium.copyWith(fontWeight: FontWeight.w700),
-          ),
+    final c = context.colors;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedOpacity(
+        duration: Motion.fast,
+        opacity: dimmed ? 0.35 : 1,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2.5)),
+            ),
+            const SizedBox(width: Sp.sm),
+            Flexible(
+              child: Text(label, overflow: TextOverflow.ellipsis, style: t.labelMedium.copyWith(color: c.primaryText)),
+            ),
+            const SizedBox(width: Sp.sm),
+            Text(value, style: t.labelMedium.copyWith(color: c.secondaryText, fontWeight: FontWeight.w600)),
+          ],
         ),
-        const SizedBox(width: Sp.sm),
-        Text(value, style: t.labelMedium.copyWith(color: context.colors.secondaryText, fontWeight: FontWeight.w500)),
-      ],
+      ),
     );
   }
 }
@@ -445,44 +690,55 @@ class _DonutPainter extends CustomPainter {
     required this.values,
     required this.colors,
     required this.progress,
-    required this.gapColor,
-    required this.empty,
+    required this.focus,
+    required this.track,
   });
 
   final List<double> values;
   final List<Color> colors;
   final double progress;
-  final Color gapColor;
-  final Color empty;
+  final int? focus;
+  final Color track;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = size.width * 0.2;
-    final rect = Rect.fromCircle(center: size.center(Offset.zero), radius: (size.width - stroke) / 2);
-    final total = values.fold<double>(0, (s, v) => s + v);
-    final paint = Paint()
+    final stroke = size.width * 0.115;
+    final radius = (size.width - stroke) / 2 - 3;
+    final rect = Rect.fromCircle(center: size.center(Offset.zero), radius: radius);
+    canvas.drawCircle(rect.center, radius, Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke;
+      ..strokeWidth = stroke
+      ..color = track);
 
-    if (total <= 0) {
-      canvas.drawArc(rect, 0, math.pi * 2, false, paint..color = empty);
-      return;
-    }
-
-    const gap = 0.045; // radians between segments
+    final total = values.fold<double>(0, (s, v) => s + v);
+    if (total <= 0) return;
     final nonZero = values.where((v) => v > 0).length;
+    // Rounded caps extend past the arc ends; reserve that plus a gap.
+    final capAngle = (stroke / 2) / radius;
+    final gap = nonZero > 1 ? 0.07 + capAngle * 2 : 0.0;
     var start = -math.pi / 2;
-    final sweepTotal = math.pi * 2 * progress;
+    final sweepTotal = 2 * math.pi * progress;
     for (var i = 0; i < values.length; i++) {
       if (values[i] <= 0) continue;
       final sweep = values[i] / total * sweepTotal;
-      final visible = nonZero > 1 ? math.max(0.0, sweep - gap) : sweep;
-      canvas.drawArc(rect, start + (nonZero > 1 ? gap / 2 : 0), visible, false, paint..color = colors[i]);
+      final visible = math.max(0.001, sweep - gap);
+      final focused = focus == null || focus == i;
+      canvas.drawArc(
+        rect,
+        start + gap / 2,
+        visible,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = nonZero > 1 && sweep > gap ? StrokeCap.round : StrokeCap.butt
+          ..strokeWidth = focus == i ? stroke * 1.25 : stroke
+          ..color = focused ? colors[i] : colors[i].withValues(alpha: 0.3),
+      );
       start += sweep;
     }
   }
 
   @override
   bool shouldRepaint(_DonutPainter old) =>
-      old.progress != progress || old.values != values || old.colors != colors;
+      old.progress != progress || old.focus != focus || old.values != values || old.colors != colors;
 }

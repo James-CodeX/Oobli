@@ -11,7 +11,7 @@ class ToneTile extends StatelessWidget {
     super.key,
     required this.icon,
     required this.tone,
-    this.size = 48,
+    this.size = 40,
     this.radius,
     this.soft = false,
   });
@@ -34,7 +34,7 @@ class ToneTile extends StatelessWidget {
         color: soft ? c.toneContainer(tone) : c.tone(tone),
         borderRadius: BorderRadius.circular(radius ?? size * 0.3),
       ),
-      child: Icon(icon, size: size * 0.5, color: soft ? c.tone(tone) : c.onTone(tone)),
+      child: Icon(icon, size: size * 0.48, color: soft ? c.tone(tone) : c.onTone(tone)),
     );
   }
 }
@@ -177,7 +177,7 @@ class OobliSaysCard extends StatelessWidget {
       crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(title, style: t.labelMedium.copyWith(fontWeight: FontWeight.w700, color: c.onSurface)),
+        Text(title, style: t.labelMedium.copyWith(fontWeight: FontWeight.w600, color: c.primary)),
         const SizedBox(height: Sp.xs),
         AnimatedSwitcher(
           duration: Motion.medium,
@@ -185,7 +185,7 @@ class OobliSaysCard extends StatelessWidget {
             message,
             key: ValueKey(message),
             textAlign: centered ? TextAlign.center : TextAlign.start,
-            style: messageStyle ?? t.bodyMedium.copyWith(color: c.primaryText),
+            style: messageStyle ?? t.bodyMedium.copyWith(color: c.primaryText, height: 1.45),
           ),
         ),
         if (actions != null) ...[const SizedBox(height: Sp.md), actions!],
@@ -194,11 +194,11 @@ class OobliSaysCard extends StatelessWidget {
 
     return OobliCard(
       shadow: !tinted,
-      borderWidth: tinted ? 1 : 2,
+      borderWidth: tinted ? 1 : 1.5,
       color: tinted ? c.primaryContainer : c.surface,
       borderColor: tinted ? c.primary.withValues(alpha: 0.2) : c.outline,
       radius: tinted ? Rad.lg : Rad.xl,
-      padding: EdgeInsets.all(tinted ? Sp.md : Sp.lg),
+      padding: const EdgeInsets.all(Sp.lg),
       child: leading == null
           ? SizedBox(width: double.infinity, child: text)
           : Row(

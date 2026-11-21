@@ -15,6 +15,7 @@ import '../../ui/widgets/charts.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
+import '../../ui/widgets/progress.dart';
 import '../../ui/widgets/tiles.dart';
 import '../assistant/ask_oobli_sheet.dart';
 
@@ -36,6 +37,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     final period = stats.rangeFor(range);
     final channels = stats.byChannel(period.start, period.end);
     final categories = stats.byCategory(period.start, period.end);
+    final periodTotal = channels.values.fold<double>(0, (s, v) => s + v);
 
     return Scaffold(
       body: ListView(
@@ -62,8 +64,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                   onTap: () => showAskOobli(context),
                   semanticLabel: 'Ask Oobli',
                   child: Container(
-                    width: 48,
-                    height: 48,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(color: c.secondaryBackground, shape: BoxShape.circle),
                     child: Icon(Icons.auto_awesome_rounded, color: c.onSurface),
                   ),
@@ -95,19 +97,27 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                   const SizedBox(height: Sp.lg),
                   const Divider(),
                   const SizedBox(height: Sp.lg),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _ChannelChip(label: 'Paybill', value: channels[TxChannel.paybill] ?? 0, tone: Tone.primary),
-                        const SizedBox(width: Sp.md),
-                        _ChannelChip(label: 'Tills', value: channels[TxChannel.till] ?? 0, tone: Tone.success),
-                        const SizedBox(width: Sp.md),
-                        _ChannelChip(label: 'Pochi', value: channels[TxChannel.pochi] ?? 0, tone: Tone.accent),
-                        const SizedBox(width: Sp.md),
-                        _ChannelChip(label: 'Send', value: channels[TxChannel.send] ?? 0, tone: Tone.info),
-                      ],
-                    ),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: Sp.sm,
+                    crossAxisSpacing: Sp.sm,
+                    childAspectRatio: 2.7,
+                    children: [
+                      for (final (label, channel, tone) in const [
+                        ('Paybill', TxChannel.paybill, Tone.primary),
+                        ('Tills', TxChannel.till, Tone.secondary),
+                        ('Pochi', TxChannel.pochi, Tone.accent),
+                        ('Send Money', TxChannel.send, Tone.warning),
+                      ])
+                        _ChannelChip(
+                          label: label,
+                          value: channels[channel] ?? 0,
+                          share: periodTotal <= 0 ? 0 : (channels[channel] ?? 0) / periodTotal,
+                          tone: tone,
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -133,8 +143,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       : Column(
                           children: [
                             DonutChart(
-                              size: 150,
+                              size: 132,
                               slices: _channelSlices(context, channels),
+                              centerValue: Fmt.compactKes(periodTotal),
+                              centerLabel: range.label.toLowerCase(),
                             ),
                             const SizedBox(height: Sp.lg),
                             for (final (i, e) in categories.entries.take(3).indexed) ...[
@@ -204,27 +216,41 @@ class _RangeDropdown extends StatelessWidget {
   }
 }
 
+/// Compact channel stat: tinted tile with a share bar.
 class _ChannelChip extends StatelessWidget {
-  const _ChannelChip({required this.label, required this.value, required this.tone});
+  const _ChannelChip({required this.label, required this.value, required this.share, required this.tone});
 
   final String label;
   final double value;
+  final double share;
   final Tone tone;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
+    final color = c.tone(tone);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: Sp.md),
-      constraints: const BoxConstraints(minWidth: 96),
-      decoration: BoxDecoration(color: c.tone(tone), borderRadius: Rad.all(Rad.sm)),
+      padding: const EdgeInsets.fromLTRB(Sp.md, Sp.sm, Sp.md, Sp.sm),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: Rad.all(Rad.md),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: t.labelSmall.copyWith(color: c.onTone(tone).withValues(alpha: 0.7))),
-          const SizedBox(height: 2),
-          Text(Fmt.compactKes(value), style: t.titleLarge.copyWith(color: c.onTone(tone), fontSize: 18)),
+          Row(
+            children: [
+              Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              Expanded(child: Text(label, style: t.labelSmall.copyWith(color: c.secondaryText))),
+              Text('${(share * 100).round()}%', style: t.labelSmall.copyWith(color: color, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          Text(Fmt.compactKes(value), style: t.titleSmall.copyWith(fontWeight: FontWeight.w700)),
+          OobliProgressBar(value: share, color: color, height: 3, trackColor: color.withValues(alpha: 0.15)),
         ],
       ),
     );
@@ -299,11 +325,11 @@ class _SuggestionPanelState extends ConsumerState<_SuggestionPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 50,
-            height: 50,
+            width: 40,
+            height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
-            child: Text('O', style: t.headlineSmall.copyWith(color: c.onSurface, fontWeight: FontWeight.w900)),
+            child: Text('O', style: t.headlineSmall.copyWith(color: c.onSurface, fontWeight: FontWeight.w800)),
           ),
           const SizedBox(width: Sp.md),
           Expanded(

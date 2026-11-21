@@ -42,9 +42,9 @@ class OobliButton extends StatelessWidget {
       OobliButtonVariant.danger => (c.error, c.onError, null),
     };
     final (double height, double radius, double hPad, TextStyle style, double iconSize) = switch (size) {
-      OobliButtonSize.small => (34.0, Rad.sm, Sp.md, t.labelMedium, 16.0),
-      OobliButtonSize.medium => (44.0, Rad.md, Sp.lg, t.labelLarge, 18.0),
-      OobliButtonSize.large => (52.0, Rad.lg, Sp.lg, t.labelLarge, 20.0),
+      OobliButtonSize.small => (30.0, Rad.sm, Sp.md, t.labelMedium.copyWith(fontWeight: FontWeight.w600), 14.0),
+      OobliButtonSize.medium => (40.0, Rad.md, Sp.lg, t.labelLarge, 16.0),
+      OobliButtonSize.large => (46.0, Rad.lg, Sp.xl, t.labelLarge.copyWith(fontSize: 14), 18.0),
     };
 
     final content = loading
@@ -57,14 +57,14 @@ class OobliButton extends StatelessWidget {
             children: [
               if (icon != null) ...[
                 Icon(icon, size: iconSize, color: fg),
-                const SizedBox(width: Sp.sm),
+                const SizedBox(width: 6),
               ],
               Flexible(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: style.copyWith(color: fg, letterSpacing: 0.6),
+                  style: style.copyWith(color: fg, letterSpacing: 0.2),
                 ),
               ),
             ],
@@ -123,7 +123,7 @@ class OobliIconButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.color,
-    this.size = 24,
+    this.size = 22,
     this.tooltip,
   });
 
@@ -139,7 +139,7 @@ class OobliIconButton extends StatelessWidget {
         scale: 0.9,
         semanticLabel: tooltip,
         child: SizedBox.square(
-          dimension: 44,
+          dimension: 40,
           child: Icon(icon, size: size, color: color ?? context.colors.primaryText),
         ),
       );

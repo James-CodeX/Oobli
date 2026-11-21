@@ -30,10 +30,10 @@ class TransactionRow extends StatelessWidget {
       onTap: onEdit,
       scale: 0.98,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: Sp.lg),
+        padding: const EdgeInsets.symmetric(vertical: Sp.md),
         child: Row(
           children: [
-            SizedBox(width: 48, child: Icon(tx.category.icon, color: c.secondaryText, size: 28)),
+            SizedBox(width: 36, child: Icon(tx.category.icon, color: c.secondaryText, size: 22)),
             const SizedBox(width: Sp.sm),
             Expanded(
               child: Column(
@@ -67,12 +67,12 @@ class TransactionRow extends StatelessWidget {
                 Text(
                   _amount(tx),
                   style: t.titleMedium.copyWith(
-                    fontSize: 18,
+                    fontSize: 14,
                     color: tx.isOutgoing ? c.primaryText : c.primary,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text('Edit', style: t.labelSmall.copyWith(color: c.primary, fontSize: 11)),
+                Text('Edit', style: t.labelSmall.copyWith(color: c.primary)),
               ],
             ),
           ],
@@ -106,7 +106,7 @@ class TransactionCard extends StatelessWidget {
 
     final header = Row(
       children: [
-        ToneTile(icon: tx.category.icon, tone: tx.category.tone, size: 48, radius: Rad.md, soft: review),
+        ToneTile(icon: tx.category.icon, tone: tx.category.tone, size: 40, radius: Rad.md, soft: review),
         const SizedBox(width: Sp.md),
         Expanded(
           child: Column(

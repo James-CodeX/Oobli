@@ -43,6 +43,7 @@ Endpoint/project can be overridden with `--dart-define=APPWRITE_ENDPOINT=... --d
 
 ## Themes & branding
 
+- Typography is a single family, **Poppins** (closest open-licence match to Gilroy, as used by modern Kenyan banking apps), set in `lib/core/theme/oobli_text.dart`. To use a licensed font instead, drop its files in `assets/fonts/` and change `OobliFonts.family` + `pubspec.yaml`.
 - Light and dark themes come straight from the design tokens (`lib/core/theme`). The app follows the phone's setting by default; users can force Light/Dark in **Settings → App Theme**.
 - The launcher icon and the native launch screen are generated from `assets/branding/` (white background in light mode, `#131F24` in dark mode). After changing the logo:
 

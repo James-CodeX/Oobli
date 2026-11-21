@@ -147,7 +147,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                     : Text('Activity',
                                         key: const ValueKey('title'),
                                         textAlign: TextAlign.center,
-                                        style: t.titleLarge.copyWith(fontSize: 22, color: c.secondaryText)),
+                                        style: t.titleLarge.copyWith(fontSize: 17, color: c.primaryText)),
                               ),
                             ),
                             OobliIconButton(
@@ -167,10 +167,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             tinted: true,
                             message: note,
                             leading: Container(
-                              width: 42,
-                              height: 42,
+                              width: 36,
+                              height: 36,
                               decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
-                              child: Icon(Icons.face_6_rounded, color: c.onSurface, size: 26),
+                              child: Icon(Icons.face_6_rounded, color: c.onSurface, size: 22),
                             ),
                           ),
                         ),

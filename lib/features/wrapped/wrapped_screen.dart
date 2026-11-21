@@ -116,16 +116,16 @@ class _Header extends StatelessWidget {
             ],
           ),
           Container(
-            width: 120,
-            height: 120,
+            width: 96,
+            height: 96,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.18), shape: BoxShape.circle),
-            child: const OobliMascot(size: 72, glow: false, mood: MascotMood.joy),
+            child: const OobliMascot(size: 58, glow: false, mood: MascotMood.joy),
           ),
           const SizedBox(height: Sp.lg),
           Text(
             'Oobli Wrapped',
-            style: t.headlineMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w900, shadows: const [
+            style: t.headlineMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w800, shadows: const [
               Shadow(color: Color(0x33000000), offset: Offset(0, 2)),
             ]),
           ),
@@ -170,7 +170,7 @@ class _Body extends StatelessWidget {
             builder: (context, v, _) => Text(
               Fmt.kes(v),
               textAlign: TextAlign.center,
-              style: t.headlineLarge.copyWith(fontWeight: FontWeight.w900, fontSize: 38),
+              style: t.headlineLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 32),
             ),
           ),
           const SizedBox(height: Sp.md),
@@ -186,7 +186,7 @@ class _Body extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const ToneTile(icon: Icons.psychology_rounded, tone: Tone.primary, size: 48, radius: Rad.md),
+                const ToneTile(icon: Icons.psychology_rounded, tone: Tone.primary, size: 40, radius: Rad.md),
                 const SizedBox(width: Sp.md),
                 Expanded(
                   child: Column(
@@ -218,8 +218,10 @@ class _Body extends StatelessWidget {
                 const SizedBox(height: Sp.lg),
                 Center(
                   child: DonutChart(
-                    size: 160,
+                    size: 140,
                     legend: LegendPosition.bottom,
+                    centerValue: Fmt.compactKes(recap.total),
+                    centerLabel: 'spent',
                     slices: [
                       for (final (i, e) in top.indexed)
                         DonutSlice(label: e.key.label.split(' ').first, value: e.value, color: rankColors[i]),
@@ -334,7 +336,7 @@ class _CategoryRank extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(category.label, style: t.titleLarge.copyWith(fontSize: 18)),
+                  Text(category.label, style: t.titleMedium),
                   const SizedBox(height: Sp.xs),
                   Text(Fmt.kes(amount), style: t.bodyMedium.copyWith(color: c.secondaryText)),
                 ],

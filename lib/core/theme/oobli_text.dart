@@ -1,44 +1,51 @@
 import 'package:material_ui/material_ui.dart';
 
+/// One geometric family throughout (like modern Kenyan banking apps).
+/// Poppins is the closest open-licence match to Gilroy; swapping the family
+/// here (and in pubspec.yaml) re-skins the whole app.
 abstract final class OobliFonts {
-  static const primary = 'Outfit';
-  static const secondary = 'Nunito';
-  static const mono = 'SpaceGrotesk';
+  static const family = 'Poppins';
 }
 
-/// Text styles from the design theme (colourless; colour is applied by the
-/// theme's default text colour or explicitly at the call site).
+/// Compact type scale. Colourless by default (the theme supplies colour);
+/// call sites tint with `copyWith(color: ...)`.
 @immutable
 class OobliText extends ThemeExtension<OobliText> {
   const OobliText({required this.color});
 
   final Color color;
 
-  TextStyle _s(String family, double size, FontWeight weight, double height) =>
-      TextStyle(
-        fontFamily: family,
+  TextStyle _s(double size, FontWeight weight, double height, {double tracking = 0}) => TextStyle(
+        fontFamily: OobliFonts.family,
         fontSize: size,
         fontWeight: weight,
         height: height,
         color: color,
-        letterSpacing: family == OobliFonts.primary ? -0.2 : 0,
+        letterSpacing: tracking,
       );
 
-  TextStyle get displayLarge => _s(OobliFonts.primary, 58, FontWeight.w800, 1.1);
-  TextStyle get displayMedium => _s(OobliFonts.primary, 46, FontWeight.w800, 1.15);
-  TextStyle get displaySmall => _s(OobliFonts.primary, 38, FontWeight.w800, 1.2);
-  TextStyle get headlineLarge => _s(OobliFonts.primary, 32, FontWeight.w700, 1.2);
-  TextStyle get headlineMedium => _s(OobliFonts.primary, 26, FontWeight.w700, 1.25);
-  TextStyle get headlineSmall => _s(OobliFonts.primary, 24, FontWeight.w700, 1.3);
-  TextStyle get titleLarge => _s(OobliFonts.secondary, 20, FontWeight.w700, 1.3);
-  TextStyle get titleMedium => _s(OobliFonts.secondary, 17, FontWeight.w700, 1.35);
-  TextStyle get titleSmall => _s(OobliFonts.secondary, 14, FontWeight.w700, 1.4);
-  TextStyle get bodyLarge => _s(OobliFonts.secondary, 17, FontWeight.w500, 1.5);
-  TextStyle get bodyMedium => _s(OobliFonts.secondary, 15, FontWeight.w500, 1.5);
-  TextStyle get bodySmall => _s(OobliFonts.secondary, 13, FontWeight.w500, 1.5);
-  TextStyle get labelLarge => _s(OobliFonts.mono, 14, FontWeight.w600, 1.3);
-  TextStyle get labelMedium => _s(OobliFonts.mono, 12, FontWeight.w600, 1.3);
-  TextStyle get labelSmall => _s(OobliFonts.mono, 10, FontWeight.w600, 1.3);
+  // Display / headlines: tight tracking for a confident, compact look.
+  TextStyle get displayLarge => _s(40, FontWeight.w800, 1.1, tracking: -1);
+  TextStyle get displayMedium => _s(34, FontWeight.w800, 1.12, tracking: -0.8);
+  TextStyle get displaySmall => _s(30, FontWeight.w700, 1.15, tracking: -0.6);
+  TextStyle get headlineLarge => _s(26, FontWeight.w700, 1.2, tracking: -0.5);
+  TextStyle get headlineMedium => _s(22, FontWeight.w700, 1.25, tracking: -0.4);
+  TextStyle get headlineSmall => _s(19, FontWeight.w600, 1.3, tracking: -0.2);
+
+  // Titles: list rows, card headers.
+  TextStyle get titleLarge => _s(16, FontWeight.w600, 1.35, tracking: -0.1);
+  TextStyle get titleMedium => _s(15, FontWeight.w600, 1.35);
+  TextStyle get titleSmall => _s(13, FontWeight.w600, 1.4);
+
+  // Body.
+  TextStyle get bodyLarge => _s(14, FontWeight.w400, 1.5);
+  TextStyle get bodyMedium => _s(13, FontWeight.w400, 1.5);
+  TextStyle get bodySmall => _s(12, FontWeight.w400, 1.45);
+
+  // Labels: buttons, chips, captions.
+  TextStyle get labelLarge => _s(13, FontWeight.w600, 1.3, tracking: 0.1);
+  TextStyle get labelMedium => _s(11, FontWeight.w500, 1.3, tracking: 0.1);
+  TextStyle get labelSmall => _s(10, FontWeight.w500, 1.3, tracking: 0.2);
 
   @override
   OobliText copyWith({Color? color}) => OobliText(color: color ?? this.color);

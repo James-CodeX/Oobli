@@ -82,7 +82,7 @@ class _GoalDetailsSheetState extends ConsumerState<_GoalDetailsSheet> {
           children: [
             Row(
               children: [
-                ToneTile(icon: goal.icon.icon, tone: goal.tone, size: 56, radius: Rad.lg),
+                ToneTile(icon: goal.icon.icon, tone: goal.tone, size: 48, radius: Rad.lg),
                 const SizedBox(width: Sp.md),
                 Expanded(
                   child: Column(
@@ -358,8 +358,8 @@ class _GoalEditorSheetState extends ConsumerState<_GoalEditorSheet> {
                     onTap: () => setState(() => _icon = icon),
                     child: AnimatedContainer(
                       duration: Motion.fast,
-                      width: 52,
-                      height: 52,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
                         color: icon == _icon ? c.toneContainer(_tone) : c.surface,
                         borderRadius: Rad.all(Rad.md),

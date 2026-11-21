@@ -64,7 +64,7 @@ class _OobliTextFieldState extends State<OobliTextField> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.label != null) ...[
-          Text(widget.label!, style: t.labelLarge.copyWith(fontWeight: FontWeight.w700)),
+          Text(widget.label!, style: t.labelLarge.copyWith(color: c.secondaryText)),
           const SizedBox(height: Sp.sm),
         ],
         TextFormField(
@@ -80,7 +80,7 @@ class _OobliTextFieldState extends State<OobliTextField> {
           textCapitalization: widget.textCapitalization,
           autofocus: widget.autofocus,
           maxLength: widget.maxLength,
-          style: t.bodyLarge.copyWith(color: c.primaryText),
+          style: t.bodyLarge.copyWith(color: c.primaryText, fontWeight: FontWeight.w500),
           cursorColor: c.primary,
           decoration: InputDecoration(
             hintText: widget.hint,
@@ -88,8 +88,8 @@ class _OobliTextFieldState extends State<OobliTextField> {
             filled: true,
             fillColor: widget.fillColor ?? c.background,
             counterText: '',
-            contentPadding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: 14),
-            prefixIcon: widget.icon == null ? null : Icon(widget.icon, color: c.secondaryText, size: 20),
+            contentPadding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: 12),
+            prefixIcon: widget.icon == null ? null : Icon(widget.icon, color: c.secondaryText, size: 18),
             suffixIcon: widget.obscure
                 ? IconButton(
                     onPressed: () => setState(() => _hidden = !_hidden),

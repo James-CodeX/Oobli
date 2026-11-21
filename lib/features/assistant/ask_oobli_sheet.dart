@@ -120,7 +120,7 @@ class _AskOobliSheetState extends ConsumerState<AskOobliSheet> {
                     padding: const EdgeInsets.all(Sp.lg),
                     children: [
                       const SizedBox(height: Sp.lg),
-                      const Center(child: OobliMascot(size: 96, mood: MascotMood.happy)),
+                      const Center(child: OobliMascot(size: 76, mood: MascotMood.happy)),
                       const SizedBox(height: Sp.lg),
                       Text(
                         "Hi! I know your M-Pesa story. Ask me anything about your money.",
@@ -182,8 +182,8 @@ class _AskOobliSheetState extends ConsumerState<AskOobliSheet> {
                     onTap: chat.sending ? null : () => _send(_input.text),
                     semanticLabel: 'Send',
                     child: Container(
-                      width: 48,
-                      height: 48,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
                       child: Icon(Icons.arrow_upward_rounded, color: c.onPrimary),
                     ),

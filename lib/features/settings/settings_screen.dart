@@ -55,7 +55,7 @@ class SettingsScreen extends ConsumerWidget {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    InitialsAvatar(name: profile.name, size: 88),
+                    InitialsAvatar(name: profile.name, size: 72),
                     Positioned(
                       right: -2,
                       bottom: -2,
@@ -197,10 +197,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: Sp.xl),
                 Text('Oobli v${AppConfig.appVersion}', textAlign: TextAlign.center,
-                    style: t.labelSmall.copyWith(color: c.onBackground, fontSize: 12)),
+                    style: t.labelSmall.copyWith(color: c.secondaryText)),
                 const SizedBox(height: Sp.xs),
                 Text('Made with ❤️ in Nairobi', textAlign: TextAlign.center,
-                    style: t.labelSmall.copyWith(color: c.onBackground, fontSize: 12)),
+                    style: t.labelSmall.copyWith(color: c.secondaryText)),
                 SizedBox(height: MediaQuery.paddingOf(context).bottom + Sp.lg),
               ],
             ),
@@ -240,7 +240,7 @@ class _ProfileStat extends StatelessWidget {
               ],
             ),
             const SizedBox(height: Sp.xs),
-            FittedBox(child: Text(value, style: t.titleLarge.copyWith(fontSize: 22))),
+            FittedBox(child: Text(value, style: t.titleLarge)),
           ],
         ),
       ),
@@ -282,7 +282,7 @@ class _SettingRow extends StatelessWidget {
           padding: const EdgeInsets.all(Sp.md),
           child: Row(
             children: [
-              ToneTile(icon: icon, tone: tone, size: 48, radius: Rad.md),
+              ToneTile(icon: icon, tone: tone, size: 40, radius: Rad.md),
               const SizedBox(width: Sp.lg),
               Expanded(
                 child: Column(

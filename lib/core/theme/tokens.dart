@@ -1,24 +1,25 @@
 import 'package:material_ui/material_ui.dart';
 
-/// Spacing scale from the design theme.
+/// Compact spacing scale (tightened from the original design export so
+/// screens show more without feeling cramped).
 abstract final class Sp {
-  static const double xs = 4;
-  static const double sm = 8;
-  static const double md = 16;
-  static const double lg = 24;
-  static const double xl = 32;
-  static const double xxl = 48;
-  static const double xxxl = 64;
-}
-
-/// Corner radii from the design theme.
-abstract final class Rad {
   static const double xs = 4;
   static const double sm = 8;
   static const double md = 12;
   static const double lg = 16;
-  static const double xl = 20;
-  static const double xxl = 28;
+  static const double xl = 24;
+  static const double xxl = 32;
+  static const double xxxl = 48;
+}
+
+/// Corner radii.
+abstract final class Rad {
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 10;
+  static const double lg = 14;
+  static const double xl = 18;
+  static const double xxl = 24;
 
   static BorderRadius all(double r) => BorderRadius.circular(r);
 }

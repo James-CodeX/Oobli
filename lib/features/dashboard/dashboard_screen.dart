@@ -97,7 +97,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         const SliverToBoxAdapter(child: _RecentList()),
                       ],
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 96)),
+              const SliverToBoxAdapter(child: SizedBox(height: 88)),
             ],
           ),
         ),
@@ -128,7 +128,7 @@ class _Header extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Oobli says...', style: t.headlineMedium.copyWith(fontWeight: FontWeight.w900)),
+                    Text('Oobli says...', style: t.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
                     const SizedBox(height: Sp.xs),
                     AnimatedSwitcher(
                       duration: Motion.medium,
@@ -144,7 +144,7 @@ class _Header extends StatelessWidget {
               Pressable(
                 onTap: () => context.push(Routes.settings),
                 semanticLabel: 'Profile and settings',
-                child: InitialsAvatar(name: name, size: 48),
+                child: InitialsAvatar(name: name, size: 40),
               ),
             ],
           ),
@@ -202,7 +202,7 @@ class _TodayFlowCard extends ConsumerWidget {
                     curve: Curves.easeOutCubic,
                     builder: (context, v, _) => Text(
                       Fmt.kes(v, cents: true),
-                      style: t.titleLarge.copyWith(fontSize: 24),
+                      style: t.titleLarge.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],
@@ -251,7 +251,7 @@ class _InsightCards extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: Sp.md),
-                    Text(card.body, style: t.bodyMedium.copyWith(color: c.secondaryText, fontSize: 16)),
+                    Text(card.body, style: t.bodyMedium.copyWith(color: c.secondaryText)),
                     Align(
                       alignment: Alignment.centerRight,
                       child: Padding(

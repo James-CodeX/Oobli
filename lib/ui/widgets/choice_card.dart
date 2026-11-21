@@ -33,25 +33,25 @@ class ChoiceCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: Motion.medium,
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.all(Sp.lg),
+        padding: const EdgeInsets.symmetric(horizontal: Sp.lg, vertical: Sp.md),
         decoration: BoxDecoration(
           color: selected ? c.primaryContainer : c.surface,
-          borderRadius: Rad.all(Rad.xl),
-          border: Border.all(color: selected ? c.primary : c.outline, width: 2),
+          borderRadius: Rad.all(Rad.lg),
+          border: Border.all(color: selected ? c.primary : c.outline, width: 1.5),
           boxShadow: selected ? null : Shadows.sm,
         ),
         child: Row(
           children: [
-            ToneTile(icon: icon, tone: Tone.primary, size: 48, radius: Rad.lg),
+            ToneTile(icon: icon, tone: Tone.primary, size: 40, radius: Rad.md),
             const SizedBox(width: Sp.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: t.titleLarge),
+                  Text(title, style: t.titleMedium),
                   if (subtitle != null) ...[
                     const SizedBox(height: Sp.xs),
-                    Text(subtitle!, style: t.bodyMedium.copyWith(color: c.secondaryText)),
+                    Text(subtitle!, style: t.bodySmall.copyWith(color: c.secondaryText)),
                   ],
                 ],
               ),
@@ -63,15 +63,15 @@ class ChoiceCard extends StatelessWidget {
               child: selected
                   ? Container(
                       key: const ValueKey('on'),
-                      width: 28,
-                      height: 28,
+                      width: 22,
+                      height: 22,
                       decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
-                      child: Icon(Icons.check_rounded, size: 20, color: c.onPrimary),
+                      child: Icon(Icons.check_rounded, size: 16, color: c.onPrimary),
                     )
                   : Container(
                       key: const ValueKey('off'),
-                      width: 28,
-                      height: 28,
+                      width: 22,
+                      height: 22,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: c.outline, width: 2),
@@ -101,7 +101,7 @@ class PillChoice extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: Motion.fast,
-        padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? c.primaryContainer : c.surface,
           borderRadius: BorderRadius.circular(99),

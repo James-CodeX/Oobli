@@ -55,7 +55,7 @@ class GoalsScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: Sp.sm),
-                Text(_savingLine(ref), style: t.bodyMedium.copyWith(color: c.secondaryText, fontSize: 16)),
+                Text(_savingLine(ref), style: t.bodyMedium.copyWith(color: c.secondaryText)),
               ],
             ),
           ),
@@ -202,7 +202,7 @@ class _PrimaryGoalCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                ToneTile(icon: goal.icon.icon, tone: goal.tone, size: 56, radius: Rad.lg),
+                ToneTile(icon: goal.icon.icon, tone: goal.tone, size: 44, radius: Rad.lg),
                 const SizedBox(width: Sp.lg),
                 Expanded(
                   child: Column(
@@ -297,7 +297,7 @@ class _SmallGoalCard extends StatelessWidget {
           children: [
             Icon(goal.icon.icon, color: c.onSurface, size: 22),
             Text(goal.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: context.text.labelLarge.copyWith(fontWeight: FontWeight.w700, fontSize: 16)),
+                style: context.text.labelLarge.copyWith(fontWeight: FontWeight.w600)),
             OobliProgressBar(value: goal.progress, color: c.tone(tone), height: 5, radius: 0, trackColor: c.surfaceVariant),
           ],
         ),

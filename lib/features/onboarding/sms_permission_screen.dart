@@ -86,7 +86,7 @@ class _SmsPermissionScreenState extends ConsumerState<SmsPermissionScreen> {
                       ],
                     ),
                     const Spacer(),
-                    const Center(child: OobliMascot(size: 120, glow: false)),
+                    const Center(child: OobliMascot(size: 96, glow: false)),
                     const SizedBox(height: Sp.lg),
                     OobliSaysCard(
                       centered: true,
@@ -160,8 +160,8 @@ class _FeatureRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 48,
-          height: 48,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(color: c.surfaceVariant, borderRadius: Rad.all(Rad.md)),
           child: Icon(icon, color: c.primary),
         ),

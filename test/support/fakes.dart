@@ -211,9 +211,7 @@ Future<void> loadFonts() async {
   }
 
   final fonts = Directory('assets/fonts').listSync().whereType<File>().map((f) => f.path).toList();
-  await load('Outfit', fonts.where((f) => f.contains('Outfit')).toList());
-  await load('Nunito', fonts.where((f) => f.contains('Nunito')).toList());
-  await load('SpaceGrotesk', fonts.where((f) => f.contains('SpaceGrotesk')).toList());
+  await load('Poppins', fonts.where((f) => f.contains('Poppins')).toList());
 
   final flutterRoot = Platform.environment['FLUTTER_ROOT'] ??
       File(Platform.resolvedExecutable).parent.parent.parent.parent.parent.parent.path;

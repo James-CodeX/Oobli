@@ -313,7 +313,7 @@ class _DirectionToggle extends StatelessWidget {
           onTap: () => onChanged(d),
           child: AnimatedContainer(
             duration: Motion.fast,
-            height: 44,
+            height: 40,
             decoration: BoxDecoration(
               color: selected ? c.primary : Colors.transparent,
               borderRadius: Rad.all(Rad.md),

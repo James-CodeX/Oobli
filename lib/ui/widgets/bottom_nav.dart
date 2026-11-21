@@ -31,7 +31,7 @@ class OobliBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 68,
+          height: 58,
           child: Row(
             children: [
               for (var i = 0; i < items.length; i++)
@@ -79,14 +79,15 @@ class _NavButton extends StatelessWidget {
               scale: selected ? 1.12 : 1,
               duration: Motion.medium,
               curve: Motion.emphasized,
-              child: Icon(item.icon, color: color, size: 26),
+              child: Icon(item.icon, color: color, size: 22),
             ),
             const SizedBox(height: 2),
             AnimatedDefaultTextStyle(
               duration: Motion.fast,
-              style: selected
-                  ? t.titleSmall.copyWith(color: color, fontWeight: FontWeight.w800)
-                  : t.labelMedium.copyWith(color: color),
+              style: t.labelMedium.copyWith(
+                color: color,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
               child: Text(item.label, maxLines: 1),
             ),
           ],

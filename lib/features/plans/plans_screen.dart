@@ -249,7 +249,9 @@ class _PlanBody extends ConsumerWidget {
           radius: Rad.lg,
           padding: const EdgeInsets.all(Sp.lg),
           child: DonutChart(
-            size: 150,
+            size: 132,
+            centerValue: Fmt.compactKes(plan.income),
+            centerLabel: 'income',
             slices: [
               for (final a in plan.allocations)
                 DonutSlice(label: a.legend, value: a.percent.toDouble(), color: c.tone(a.tone)),
@@ -286,7 +288,7 @@ class _PlanItem extends StatelessWidget {
         children: [
           Row(
             children: [
-              ToneTile(icon: _bucketIcon(a.bucket), tone: a.tone, size: 64, radius: Rad.lg),
+              ToneTile(icon: _bucketIcon(a.bucket), tone: a.tone, size: 44, radius: Rad.lg),
               const SizedBox(width: Sp.lg),
               Expanded(
                 child: Column(

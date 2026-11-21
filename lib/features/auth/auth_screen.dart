@@ -90,7 +90,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ),
               ),
               const SizedBox(height: Sp.md),
-              Center(child: OobliMascot(size: 96, mood: _login ? MascotMood.joy : MascotMood.happy)),
+              Center(child: OobliMascot(size: 76, mood: _login ? MascotMood.joy : MascotMood.happy)),
               const SizedBox(height: Sp.lg),
               OobliSaysCard(
                 centered: true,

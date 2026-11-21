@@ -93,9 +93,9 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          OobliMascot(size: 88, mood: mood),
+          OobliMascot(size: 72, mood: mood),
           const SizedBox(height: Sp.md),
-          Text(title, textAlign: TextAlign.center, style: context.text.titleLarge),
+          Text(title, textAlign: TextAlign.center, style: context.text.titleMedium),
           const SizedBox(height: Sp.sm),
           Text(
             message,
