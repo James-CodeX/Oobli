@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/errors/app_failure.dart';
+import '../../core/network/retry.dart';
 import '../appwrite/appwrite_providers.dart';
 import '../models/plan.dart';
 import 'ids.dart';
@@ -20,11 +21,11 @@ class PlanRepository {
 
   Future<Plan?> fetch(String userId, String month) async {
     try {
-      final row = await _db.getRow(
+      final row = await withNetworkRetry(() => _db.getRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.plansTable,
         rowId: idFor(userId, month),
-      );
+      ));
       return Plan.fromRow(row.$id, row.data);
     } on AppwriteException catch (e) {
       if (e.code == 404) return null;

@@ -3,6 +3,7 @@ import 'package:appwrite/models.dart' as models;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/errors/app_failure.dart';
+import '../../core/network/retry.dart';
 import '../appwrite/appwrite_providers.dart';
 import '../models/user_profile.dart';
 
@@ -17,7 +18,7 @@ class AuthRepository {
   /// The current session's user, or `null` when signed out.
   Future<UserProfile?> currentUser() async {
     try {
-      return _toProfile(await _account.get());
+      return _toProfile(await withNetworkRetry(_account.get));
     } on AppwriteException catch (e) {
       if (e.code == 401) return null;
       throw AppFailure.from(e);
@@ -28,8 +29,8 @@ class AuthRepository {
 
   Future<UserProfile> login({required String email, required String password}) async {
     try {
-      await _account.createEmailPasswordSession(email: email.trim(), password: password);
-      return _toProfile(await _account.get());
+      await withNetworkRetry(() => _account.createEmailPasswordSession(email: email.trim(), password: password));
+      return _toProfile(await withNetworkRetry(_account.get));
     } on AppwriteException catch (e) {
       // A stale session blocks new logins; clear it and retry once.
       if (e.type == 'user_session_already_exists') {
@@ -48,12 +49,21 @@ class AuthRepository {
     required String password,
   }) async {
     try {
-      await _account.create(
-        userId: ID.unique(),
-        email: email.trim(),
-        password: password,
-        name: name.trim(),
-      );
+      await withNetworkRetry(() => _account.create(
+            userId: ID.unique(),
+            email: email.trim(),
+            password: password,
+            name: name.trim(),
+          ));
+    } on AppwriteException catch (e) {
+      // "Already exists" after a retry usually means our first attempt went
+      // through but its response was lost; logging in completes sign-up.
+      if (e.code != 409) throw AppFailure.from(e);
+      try {
+        return await login(email: email, password: password);
+      } on AppFailure {
+        throw AppFailure.from(e);
+      }
     } catch (e) {
       throw AppFailure.from(e);
     }

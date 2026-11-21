@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/errors/app_failure.dart';
+import '../../core/network/retry.dart';
 import '../appwrite/appwrite_providers.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
@@ -24,7 +25,7 @@ class TransactionRepository {
     String? cursor;
     try {
       while (out.length < _maxRows) {
-        final page = await _db.listRows(
+        final page = await withNetworkRetry(() => _db.listRows(
           databaseId: AppConfig.databaseId,
           tableId: AppConfig.transactionsTable,
           total: false,
@@ -35,7 +36,7 @@ class TransactionRepository {
             Query.limit(_pageSize),
             if (cursor != null) Query.cursorAfter(cursor),
           ],
-        );
+        ));
         out.addAll(page.rows.map((r) => Transaction.fromRow(r.$id, r.data)));
         if (page.rows.length < _pageSize) break;
         cursor = page.rows.last.$id;

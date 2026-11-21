@@ -66,11 +66,10 @@ List<Transaction> fixtureTransactions() {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   DateTime at(int daysAgo, int h, int m) => today.subtract(Duration(days: daysAgo)).add(Duration(hours: h, minutes: m));
-  final h = now.hour;
   return [
-    _tx('Naivas Supermarket', 4250, TxCategory.groceries, at(0, h.clamp(0, 23), 0), ref: 'RL82XJ91', channel: TxChannel.paybill),
-    _tx('Mama Mboga Pochi', 350, TxCategory.food, at(0, (h - 1).clamp(0, 23), 5), ref: 'RLJ29S11', channel: TxChannel.pochi, ai: true),
-    _tx('KPLC Prepaid', 1000, TxCategory.utilities, at(0, (h - 2).clamp(0, 23), 15), ref: 'RLH01K22', channel: TxChannel.paybill),
+    _tx('Naivas Supermarket', 4250, TxCategory.groceries, at(0, 0, 40), ref: 'RL82XJ91', channel: TxChannel.paybill),
+    _tx('Mama Mboga Pochi', 350, TxCategory.food, at(0, 0, 25), ref: 'RLJ29S11', channel: TxChannel.pochi, ai: true),
+    _tx('KPLC Prepaid', 1000, TxCategory.utilities, at(0, 0, 10), ref: 'RLH01K22', channel: TxChannel.paybill),
     _tx('Shell Service Station', 2500, TxCategory.transport, at(1, 18, 45), ref: 'RKP92M10'),
     _tx('John Kamau', 1200, TxCategory.transfer, at(1, 10, 30), ref: 'RKP11X02', channel: TxChannel.send, ai: true),
     _tx('Netflix', 1100, TxCategory.entertainment, at(28, 0, 1), ref: 'RKF11L99', channel: TxChannel.card),

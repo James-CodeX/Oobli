@@ -40,6 +40,9 @@ class AppFailure implements Exception {
     if (text.contains('handshake') || text.contains('certificate') || text.contains('tls')) {
       message = "Couldn't open a secure connection to Oobli. Check your phone's date & time, "
           'VPN or Private DNS settings, then try again.';
+    } else if (text.contains('connection abort')) {
+      message = 'Your phone interrupted the connection to Oobli. Check that mobile data is allowed for Oobli '
+          '(Settings → Apps → Oobli) and that no VPN, firewall or Data Saver is blocking it, then try again.';
     } else if (text.contains('timed out') || text.contains('timeout')) {
       message = 'Oobli is taking too long to respond. Please try again.';
     } else if (text.contains('failed host lookup') || text.contains('socket') ||

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/errors/app_failure.dart';
+import '../../core/network/retry.dart';
 import '../appwrite/appwrite_providers.dart';
 import '../models/ai_models.dart';
 import '../models/category.dart';
@@ -35,13 +36,13 @@ class AiService {
 
   Future<Map<String, dynamic>> _call(String path, Map<String, dynamic> body) async {
     try {
-      final execution = await _functions.createExecution(
+      final execution = await withNetworkRetry(() => _functions.createExecution(
         functionId: AppConfig.aiFunctionId,
         path: path,
         method: enums.ExecutionMethod.pOST,
         headers: {'content-type': 'application/json'},
         body: jsonEncode(body),
-      );
+      ));
       final decoded = execution.responseBody.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(execution.responseBody) as Map<String, dynamic>;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/errors/app_failure.dart';
+import '../../core/network/retry.dart';
 import '../appwrite/appwrite_providers.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
@@ -20,12 +21,12 @@ class MerchantRuleRepository {
 
   Future<Map<String, TxCategory>> fetchAll(String userId) async {
     try {
-      final page = await _db.listRows(
+      final page = await withNetworkRetry(() => _db.listRows(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.merchantRulesTable,
         total: false,
         queries: [Query.equal('userId', userId), Query.limit(1000)],
-      );
+      ));
       return {
         for (final r in page.rows)
           r.data['merchantKey'] as String: TxCategory.fromKey(r.data['category'] as String?),

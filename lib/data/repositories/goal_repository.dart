@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/errors/app_failure.dart';
+import '../../core/network/retry.dart';
 import '../appwrite/appwrite_providers.dart';
 import '../models/goal.dart';
 
@@ -16,12 +17,12 @@ class GoalRepository {
 
   Future<List<Goal>> fetchAll(String userId) async {
     try {
-      final page = await _db.listRows(
+      final page = await withNetworkRetry(() => _db.listRows(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.goalsTable,
         total: false,
         queries: [Query.equal('userId', userId), Query.orderAsc('\$createdAt'), Query.limit(100)],
-      );
+      ));
       return page.rows.map((r) => Goal.fromRow(r.$id, r.$createdAt, r.data)).toList();
     } catch (e) {
       throw AppFailure.from(e);
