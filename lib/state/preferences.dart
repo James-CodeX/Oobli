@@ -21,6 +21,7 @@ class LocalStore {
   static const _themeMode = 'theme_mode';
   static const _aiCorrections = 'ai_corrections';
   static const _dismissedSuggestions = 'dismissed_suggestions';
+  static const _session = 'session_profile';
 
   bool get seenIntro => _prefs.getBool(_seenIntro) ?? false;
   Future<void> setSeenIntro() => _prefs.setBool(_seenIntro, true);
@@ -36,6 +37,22 @@ class LocalStore {
       (_prefs.getStringList(_dismissedSuggestions) ?? const []).toSet();
   Future<void> dismissSuggestion(String merchantKey) =>
       _prefs.setStringList(_dismissedSuggestions, [...dismissedSuggestions, merchantKey]);
+
+  /// The signed-in user as of the last successful contact with Appwrite.
+  /// Lets the app start instantly and offline; `null` means "signed out".
+  Map<String, dynamic>? get cachedSession {
+    final raw = _prefs.getString(_session);
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> saveSession(Map<String, dynamic> profile) => _prefs.setString(_session, jsonEncode(profile));
+
+  Future<void> clearSession() => _prefs.remove(_session);
 
   /// Small JSON cache keyed by [name]; [key] identifies the input it was built from.
   Map<String, dynamic>? readCache(String name, String key) {
@@ -60,6 +77,7 @@ class LocalStore {
     }
     await _prefs.remove(_aiCorrections);
     await _prefs.remove(_dismissedSuggestions);
+    await _prefs.remove(_session);
   }
 }
 

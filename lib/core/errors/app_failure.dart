@@ -4,30 +4,53 @@ import 'dart:io';
 import 'package:appwrite/appwrite.dart';
 
 /// A user-presentable error. Every repository/service failure is mapped to
-/// one of these so screens never show raw exception text.
+/// one of these so screens never show raw exception text. [details] keeps the
+/// underlying technical message for the "Show details" affordance.
 class AppFailure implements Exception {
-  const AppFailure(this.message, {this.code, this.cause});
+  const AppFailure(this.message, {this.code, this.cause, this.details});
 
   final String message;
   final int? code;
   final Object? cause;
+  final String? details;
 
   bool get isUnauthorized => code == 401;
   bool get isNotFound => code == 404;
   bool get isConflict => code == 409;
 
+  static const offline = "You're offline or the connection is weak. Check your internet and try again.";
+
   factory AppFailure.from(Object error) {
     if (error is AppFailure) return error;
     if (error is AppwriteException) {
-      return AppFailure(_appwriteMessage(error), code: error.code, cause: error);
+      // The SDK wraps transport errors (DNS, TLS, sockets) without a code.
+      if (error.code == null || error.code == 0) return _transport(error.message ?? '', error);
+      return AppFailure(_appwriteMessage(error), code: error.code, cause: error, details: error.message);
     }
-    if (error is SocketException || error is TimeoutException || error is HttpException) {
-      return AppFailure(
-        "You're offline or the connection is weak. Check your internet and try again.",
-        cause: error,
-      );
+    if (error is SocketException || error is TimeoutException || error is HttpException ||
+        error is HandshakeException || error is TlsException) {
+      return _transport(error.toString(), error);
     }
-    return AppFailure('Something went wrong. Please try again.', cause: error);
+    return AppFailure('Something went wrong. Please try again.', cause: error, details: error.toString());
+  }
+
+  static AppFailure _transport(String raw, Object cause) {
+    final text = raw.toLowerCase();
+    final String message;
+    if (text.contains('handshake') || text.contains('certificate') || text.contains('tls')) {
+      message = "Couldn't open a secure connection to Oobli. Check your phone's date & time, "
+          'VPN or Private DNS settings, then try again.';
+    } else if (text.contains('timed out') || text.contains('timeout')) {
+      message = 'Oobli is taking too long to respond. Please try again.';
+    } else if (text.contains('failed host lookup') || text.contains('socket') ||
+        text.contains('network is unreachable') || text.contains('connection refused') ||
+        text.contains('connection reset') || text.contains('connection closed') ||
+        text.contains('clientexception')) {
+      message = offline;
+    } else {
+      message = "Couldn't reach Oobli's servers. Please try again.";
+    }
+    return AppFailure(message, cause: cause, details: raw.isEmpty ? cause.runtimeType.toString() : raw);
   }
 
   static String _appwriteMessage(AppwriteException e) {
@@ -47,13 +70,10 @@ class AppFailure implements Exception {
       case 'general_rate_limit_exceeded':
         return 'Too many attempts. Wait a moment and try again.';
     }
-    if (e.code == null || e.code == 0) {
-      return "You're offline or the connection is weak. Check your internet and try again.";
-    }
     if (e.code == 401) return 'Your session has expired. Please log in again.';
     return e.message ?? 'Something went wrong. Please try again.';
   }
 
   @override
-  String toString() => 'AppFailure($code): $message';
+  String toString() => 'AppFailure($code): $message${details == null ? '' : ' [$details]'}';
 }

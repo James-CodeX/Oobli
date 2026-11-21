@@ -90,6 +90,30 @@ class UserProfile {
         'lastActiveDay': lastActiveDay,
       };
 
+  /// Full snapshot for the local session cache.
+  Map<String, dynamic> toCache() => {
+        'id': id,
+        'name': name,
+        'email': email,
+        'createdAt': createdAt.toUtc().toIso8601String(),
+        'prefs': toPrefs(),
+      };
+
+  static UserProfile? fromCache(Map<String, dynamic>? json) {
+    if (json == null || json['id'] is! String) return null;
+    try {
+      return UserProfile.fromAccount(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? '',
+        email: json['email'] as String? ?? '',
+        createdAt: json['createdAt'] as String,
+        prefs: Map<String, dynamic>.from(json['prefs'] as Map? ?? const {}),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   UserProfile copyWith({
     String? name,
     bool? onboardingComplete,

@@ -8,6 +8,7 @@ import '../../core/errors/app_failure.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../state/auth_controller.dart';
+import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/mascot.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/oobli_text_field.dart';
@@ -30,7 +31,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _password = TextEditingController();
   late bool _login = widget.startWithLogin;
   bool _busy = false;
-  String? _error;
+  AppFailure? _error;
 
   static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
@@ -62,7 +63,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       // The router redirects to onboarding or home once the session exists.
     } catch (e) {
       HapticFeedback.heavyImpact();
-      if (mounted) setState(() => _error = AppFailure.from(e).message);
+      if (mounted) setState(() => _error = AppFailure.from(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -148,11 +149,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     : Padding(
                         key: ValueKey(_error),
                         padding: const EdgeInsets.symmetric(vertical: Sp.md),
-                        child: Row(
+                        child: Column(
                           children: [
-                            Icon(Icons.error_outline_rounded, color: c.error, size: 20),
-                            const SizedBox(width: Sp.sm),
-                            Expanded(child: Text(_error!, style: t.bodySmall.copyWith(color: c.error))),
+                            Row(
+                              children: [
+                                Icon(Icons.error_outline_rounded, color: c.error, size: 20),
+                                const SizedBox(width: Sp.sm),
+                                Expanded(child: Text(_error!.message, style: t.bodySmall.copyWith(color: c.error))),
+                              ],
+                            ),
+                            FailureDetails(failure: _error!),
                           ],
                         ),
                       ),

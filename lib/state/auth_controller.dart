@@ -13,30 +13,67 @@ final authControllerProvider =
 final currentUserIdProvider =
     Provider<String?>((ref) => ref.watch(authControllerProvider.select((s) => s.value?.id)));
 
+/// Offline-first session: the app never waits on the network to start.
+///
+/// * No cached session (fresh install, signed out) -> signed out immediately,
+///   so onboarding and the auth screen work without internet.
+/// * Cached session -> the user is let in at once with the cached profile,
+///   and the session is re-validated with Appwrite in the background. Only an
+///   explicit 401 signs them out; being offline keeps them in.
 class AuthController extends AsyncNotifier<UserProfile?> {
   AuthRepository get _repo => ref.read(authRepositoryProvider);
+  LocalStore get _store => ref.read(localStoreProvider);
 
   @override
   Future<UserProfile?> build() async {
-    final user = await _repo.currentUser();
-    if (user == null) return null;
-    return _touchStreak(user);
+    final cached = UserProfile.fromCache(_store.cachedSession);
+    if (cached == null) return null;
+    Future.microtask(_revalidate);
+    return cached;
+  }
+
+  Future<void> _revalidate() async {
+    try {
+      final fresh = await _repo.currentUser();
+      if (!ref.mounted) return;
+      if (fresh == null) {
+        await _publish(null);
+      } else {
+        await _publish(await _touchStreak(fresh));
+      }
+    } catch (e) {
+      debugPrint('Session check deferred (offline?): $e');
+    }
+  }
+
+  /// Sets the state and keeps the local session cache in sync with it.
+  Future<void> _publish(UserProfile? user) async {
+    state = AsyncData(user);
+    if (user == null) {
+      await _store.clearSession();
+    } else {
+      await _store.saveSession(user.toCache());
+    }
   }
 
   Future<void> login({required String email, required String password}) async {
     final user = await _repo.login(email: email, password: password);
-    state = AsyncData(await _touchStreak(user));
+    await _publish(await _touchStreak(user));
   }
 
   Future<void> register({required String name, required String email, required String password}) async {
     final user = await _repo.register(name: name, email: email, password: password);
-    state = AsyncData(await _touchStreak(user));
+    await _publish(await _touchStreak(user));
   }
 
   Future<void> logout() async {
-    await _repo.logout();
-    await ref.read(localStoreProvider).clearUserData();
-    state = const AsyncData(null);
+    try {
+      await _repo.logout();
+    } finally {
+      // Always sign out locally, even if the server could not be reached.
+      await _store.clearUserData();
+      state = const AsyncData(null);
+    }
   }
 
   /// Applies [change] to the profile and persists it to the account prefs.
@@ -44,18 +81,18 @@ class AuthController extends AsyncNotifier<UserProfile?> {
     final current = state.value;
     if (current == null) return;
     final next = change(current);
-    state = AsyncData(next); // optimistic
+    await _publish(next); // optimistic
     try {
-      state = AsyncData(await _repo.savePrefs(next));
+      await _publish(await _repo.savePrefs(next));
     } catch (e) {
-      state = AsyncData(current);
+      await _publish(current);
       rethrow;
     }
   }
 
   Future<void> updateName(String name) async {
     if (state.value == null) return;
-    state = AsyncData(await _repo.updateName(name));
+    await _publish(await _repo.updateName(name));
   }
 
   /// Daily-open streak, Duolingo style.

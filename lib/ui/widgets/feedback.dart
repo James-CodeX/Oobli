@@ -118,16 +118,57 @@ class ErrorRetry extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => EmptyState(
-        title: 'Oops, a small hiccup',
-        message: AppFailure.from(error).message,
-        action: OobliButton(
-          label: 'Try again',
-          icon: Icons.refresh_rounded,
-          size: OobliButtonSize.medium,
-          onPressed: onRetry,
+  Widget build(BuildContext context) {
+    final failure = AppFailure.from(error);
+    return EmptyState(
+      title: 'Oops, a small hiccup',
+      message: failure.message,
+      action: OobliButton(
+        label: 'Try again',
+        icon: Icons.refresh_rounded,
+        size: OobliButtonSize.medium,
+        onPressed: onRetry,
+      ),
+      secondary: FailureDetails(failure: failure),
+    );
+  }
+}
+
+/// "Show details" toggle revealing the technical cause (selectable, for support).
+class FailureDetails extends StatefulWidget {
+  const FailureDetails({super.key, required this.failure});
+
+  final AppFailure failure;
+
+  @override
+  State<FailureDetails> createState() => _FailureDetailsState();
+}
+
+class _FailureDetailsState extends State<FailureDetails> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = widget.failure.details;
+    if (details == null || details.isEmpty) return const SizedBox.shrink();
+    final c = context.colors;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          onPressed: () => setState(() => _open = !_open),
+          child: Text(_open ? 'Hide details' : 'Show details',
+              style: context.text.labelMedium.copyWith(color: c.secondaryText)),
         ),
-      );
+        if (_open)
+          SelectableText(
+            details,
+            textAlign: TextAlign.center,
+            style: context.text.bodySmall.copyWith(color: c.hint, fontSize: 11),
+          ),
+      ],
+    );
+  }
 }
 
 /// Pulsing placeholder block for loading states.
