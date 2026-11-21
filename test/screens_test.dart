@@ -78,7 +78,9 @@ void main() {
     await render(tester, const DashboardScreen(), 'dashboard', height: 1400);
     expect(find.text('Oobli says...'), findsOneWidget);
     expect(find.text("Today's Flow"), findsOneWidget);
-    expect(find.text('Subscription Alert'), findsOneWidget);
+    expect(find.text('Where it went'), findsOneWidget);
+    expect(find.text('View analytics'), findsOneWidget);
+    expect(find.text('Subscription Alert'), findsNothing);
     expect(find.text('Recent M-Pesa'), findsOneWidget);
     expect(find.text('Ask Oobli'), findsOneWidget);
   });

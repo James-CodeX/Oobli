@@ -4,10 +4,8 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../app/router.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/theme/oobli_colors.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
-import '../../data/models/ai_models.dart';
 import '../../state/auth_controller.dart';
 import '../../state/insights_controller.dart';
 import '../../state/transactions_controller.dart';
@@ -16,6 +14,8 @@ import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/tiles.dart';
+import '../../domain/spending_stats.dart';
+import '../analytics/channel_slices.dart';
 import '../assistant/ask_oobli_sheet.dart';
 import '../transactions/transaction_editor_sheet.dart';
 import '../transactions/transaction_widgets.dart';
@@ -93,7 +93,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ? [SliverFillRemaining(hasScrollBody: false, child: _EmptyFeed(smsEnabled: profile?.smsSyncEnabled ?? false))]
                     : [
                         const SliverToBoxAdapter(child: _TodayFlowCard()),
-                        SliverToBoxAdapter(child: _InsightCards(cards: insights.cards)),
+                        const SliverToBoxAdapter(child: _DistributionCard()),
                         const SliverToBoxAdapter(child: _RecentList()),
                       ],
               ),
@@ -217,53 +217,58 @@ class _TodayFlowCard extends ConsumerWidget {
   }
 }
 
-class _InsightCards extends StatelessWidget {
-  const _InsightCards({required this.cards});
-
-  final List<InsightCard> cards;
+/// This week's spend by channel with a shortcut to the full Analytics page.
+class _DistributionCard extends ConsumerWidget {
+  const _DistributionCard();
 
   @override
-  Widget build(BuildContext context) {
-    if (cards.isEmpty) return const SizedBox.shrink();
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final t = context.text;
+    final stats = ref.watch(statsProvider);
+    final week = stats.rangeFor(FlowRange.week);
+    final channels = stats.byChannel(week.start, week.end);
+    final total = channels.values.fold<double>(0, (s, v) => s + v);
+    if (total <= 0) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, Sp.lg),
-      child: Column(
-        children: [
-          for (final card in cards)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Sp.md),
-              child: OobliCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: OobliCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('Where it went', style: t.titleMedium)),
+                Text('This week', style: t.labelMedium.copyWith(color: c.secondaryText)),
+              ],
+            ),
+            const SizedBox(height: Sp.md),
+            DonutChart(
+              size: 132,
+              slices: channelSlices(c, channels),
+              centerValue: Fmt.compactKes(total),
+              centerLabel: 'this week',
+            ),
+            const SizedBox(height: Sp.md),
+            const Divider(),
+            Pressable(
+              onTap: () => context.push(Routes.analytics),
+              semanticLabel: 'View analytics',
+              child: Padding(
+                padding: const EdgeInsets.only(top: Sp.md),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        ToneDot(
-                          tone: card.tone,
-                          icon: card.tone == Tone.warning
-                              ? Icons.notifications_active_rounded
-                              : Icons.insights_rounded,
-                        ),
-                        const SizedBox(width: Sp.md),
-                        Expanded(child: Text(card.title, style: t.titleLarge)),
-                      ],
-                    ),
-                    const SizedBox(height: Sp.md),
-                    Text(card.body, style: t.bodyMedium.copyWith(color: c.secondaryText)),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: Sp.md, right: Sp.lg),
-                        child: OobliLink('Details', onTap: () => context.push(Routes.analytics)),
-                      ),
-                    ),
+                    Icon(Icons.insights_rounded, size: 18, color: c.primary),
+                    const SizedBox(width: Sp.sm),
+                    Expanded(child: Text('View analytics', style: t.labelLarge.copyWith(color: c.primary))),
+                    Icon(Icons.chevron_right_rounded, size: 20, color: c.primary),
                   ],
                 ),
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

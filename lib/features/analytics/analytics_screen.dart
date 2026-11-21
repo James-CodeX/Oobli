@@ -18,6 +18,7 @@ import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/progress.dart';
 import '../../ui/widgets/tiles.dart';
 import '../assistant/ask_oobli_sheet.dart';
+import 'channel_slices.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -144,7 +145,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                           children: [
                             DonutChart(
                               size: 132,
-                              slices: _channelSlices(context, channels),
+                              slices: channelSlices(context.colors, channels),
                               centerValue: Fmt.compactKes(periodTotal),
                               centerLabel: range.label.toLowerCase(),
                             ),
@@ -170,17 +171,6 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         ],
       ),
     );
-  }
-
-  static List<DonutSlice> _channelSlices(BuildContext context, Map<TxChannel, double> channels) {
-    final c = context.colors;
-    final palette = [c.primary, c.secondary, c.accent, c.warning];
-    final top = channels.entries.take(3).toList();
-    final rest = channels.entries.skip(3).fold<double>(0, (s, e) => s + e.value);
-    return [
-      for (final (i, e) in top.indexed) DonutSlice(label: e.key.label, value: e.value, color: palette[i]),
-      if (rest > 0) DonutSlice(label: 'Other', value: rest, color: palette[3]),
-    ];
   }
 }
 
