@@ -89,6 +89,15 @@ jobs:
 
             Open the APK on your phone and allow "Install unknown apps" for your browser or file manager when asked.
 
+      - name: Publish the APK for the website download button
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        if: env.APPWRITE_API_KEY != ''
+        run: |
+          node .github/scripts/appwrite-upload.mjs downloads oobli-android \
+            "dist/oobli-${{ steps.version.outputs.name }}-arm64-v8a.apk" \
+            "oobli-${{ steps.version.outputs.name }}.apk"
+
       - name: Remove signing material
         if: always()
         run: rm -f android/app/upload-keystore.jks android/key.properties

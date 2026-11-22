@@ -83,6 +83,23 @@ git tag v1.0.1 && git push origin v1.0.1
 
 Signing uses repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`. Local release builds use `android/key.properties` (git-ignored). **Back up the upload keystore**: losing it means users must uninstall to update.
 
+## Website (`web/`)
+
+The landing page, Terms of Service and Privacy Policy are a small Vite + React site (three static pages, no router) hosted on **Appwrite Sites** (site `oobli-web`).
+
+```bash
+cd web
+npm install
+npm run dev     # http://localhost:5173
+npm test        # vitest
+npm run build   # dist/
+```
+
+- The `Web` workflow tests, builds and deploys `web/` to Appwrite on every push to `main` that touches it (`.github/scripts/appwrite-deploy-site.sh`).
+- The download buttons point to the public `downloads` bucket. The `Release` workflow uploads each new arm64 APK there as `oobli-android`.
+- Both need the `APPWRITE_API_KEY` repository secret with scopes `sites.read`, `sites.write`, `files.read` and `files.write`.
+- Before launch, set a real contact address in `web/src/config.js` and have the legal pages reviewed.
+
 ## Before publishing
 
 - **Google Play SMS policy:** `READ_SMS` is a restricted permission. Play only allows it for approved use cases. Submit the Permissions Declaration Form (financial SMS-based budgeting is a recognised exception), or distribute outside Play.
