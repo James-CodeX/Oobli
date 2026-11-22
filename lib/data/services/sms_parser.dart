@@ -183,8 +183,9 @@ abstract final class MpesaParser {
       result = build(m.group(1), 'Cash withdrawal · $name', TxChannel.withdraw, TxDirection.out,
           category: TxCategory.other);
     } else if ((m = _deposit.firstMatch(body)) != null) {
+      // Depositing cash at an agent moves your own money into M-Pesa.
       result = build(m!.group(1), 'Cash deposit · ${m.group(2)}', TxChannel.deposit,
-          TxDirection.inbound, category: TxCategory.income);
+          TxDirection.inbound, category: TxCategory.ownTransfer);
     }
 
     if (result == null || result.amount <= 0) return null;

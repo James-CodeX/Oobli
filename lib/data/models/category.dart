@@ -20,6 +20,7 @@ enum TxCategory {
   fees('fees', 'Fees & Charges', Icons.receipt_long_rounded, Tone.neutral),
   income('income', 'Income', Icons.south_west_rounded, Tone.primary),
   bankWithdrawal('bank_withdrawal', 'Bank withdrawal', Icons.account_balance_rounded, Tone.info),
+  ownTransfer('own_transfer', 'Own transfer', Icons.swap_horiz_rounded, Tone.neutral),
   other('other', 'Other', Icons.category_rounded, Tone.neutral);
 
   const TxCategory(this.key, this.label, this.icon, this.tone);
@@ -37,7 +38,7 @@ enum TxCategory {
       values.where((c) => c != income && c != bankWithdrawal).toList();
 
   /// Categories a user can pick for money coming in.
-  static const receiving = [income, bankWithdrawal, savings, debt, transfer, other];
+  static const receiving = [income, bankWithdrawal, ownTransfer, savings, debt, transfer, other];
 
   /// Whether this category makes sense for money in ([inbound]) or out.
   bool fits({required bool inbound}) => inbound ? receiving.contains(this) : this != income && this != bankWithdrawal;
@@ -52,7 +53,7 @@ enum TxCategory {
         airtime || fees || debt =>
           PlanBucket.needs,
         savings => PlanBucket.savings,
-        income || bankWithdrawal => PlanBucket.none,
+        income || bankWithdrawal || ownTransfer => PlanBucket.none,
         _ => PlanBucket.flex,
       };
 }

@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:oobli/data/models/category.dart';
+import 'package:oobli/data/models/transaction.dart';
 import 'package:oobli/features/activity/activity_screen.dart';
 import 'package:oobli/features/analytics/analytics_screen.dart';
 import 'package:oobli/features/auth/auth_screen.dart';
@@ -27,14 +29,15 @@ void main() {
   Future<void> render(
     WidgetTester tester,
     Widget screen,
-    String golden, {
+    String? golden, {
     double height = 956,
     bool withPlan = true,
     bool signedIn = true,
     ThemeMode mode = ThemeMode.dark,
+    List<Transaction>? transactions,
   }) async {
     usePhoneViewport(tester, height: height);
-    await tester.pumpWidget(harness(screen, await overrides(plan: withPlan ? fixturePlan() : null, signedIn: signedIn), mode: mode));
+    await tester.pumpWidget(harness(screen, await overrides(plan: withPlan ? fixturePlan() : null, signedIn: signedIn, transactions: transactions), mode: mode));
     // Decode asset images for real (they load asynchronously in widget tests).
     await tester.runAsync(() async {
       for (final element in find.byType(Image).evaluate()) {
@@ -42,7 +45,9 @@ void main() {
       }
     });
     await settle(tester);
-    await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/$golden.png'));
+    if (golden != null) {
+      await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/$golden.png'));
+    }
   }
 
   testWidgets('Meet Oobli', (tester) async {
@@ -92,6 +97,59 @@ void main() {
     expect(find.text('TODAY'), findsOneWidget);
     expect(find.text('Naivas Supermarket'), findsOneWidget);
     expect(find.textContaining('Is this'), findsWidgets);
+  });
+
+  testWidgets('Activity: plain-English search shows totals', (tester) async {
+    await render(tester, const ActivityScreen(), null, height: 1000);
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await settle(tester);
+    await tester.enterText(find.byType(TextField), 'boda this month');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await settle(tester);
+    expect(find.textContaining('spent ·'), findsOneWidget);
+    expect(find.textContaining('Transport · this month'), findsOneWidget);
+    expect(find.text('Naivas Supermarket'), findsNothing, reason: 'groceries are filtered out');
+    await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/activity_search.png'));
+  });
+
+  testWidgets('Dashboard: upcoming bills and a low-balance warning', (tester) async {
+    final now = DateTime.now();
+    final due = DateTime(now.year, now.month, now.day + 3, 9);
+    Transaction rent(int monthsAgo, {double? balance}) => Transaction(
+          id: 'rent$monthsAgo',
+          fingerprint: 'rent$monthsAgo',
+          amount: 18000,
+          direction: TxDirection.out,
+          merchant: 'Landlord Kamau',
+          category: TxCategory.rent,
+          channel: TxChannel.send,
+          source: TxSource.mpesa,
+          occurredAt: DateTime(due.year, due.month - monthsAgo, due.day, 9),
+          confirmed: true,
+          balance: balance,
+        );
+    final txs = [
+      ...fixtureTransactions(),
+      rent(1),
+      rent(2),
+      Transaction(
+        id: 'bal',
+        fingerprint: 'bal',
+        amount: 120,
+        direction: TxDirection.out,
+        merchant: 'Super Metro',
+        category: TxCategory.transport,
+        channel: TxChannel.till,
+        source: TxSource.mpesa,
+        occurredAt: now.subtract(const Duration(minutes: 5)),
+        confirmed: true,
+        balance: 6500,
+      ),
+    ];
+    await render(tester, const DashboardScreen(), 'dashboard_bills', height: 1500, transactions: txs);
+    expect(find.text('Coming up'), findsOneWidget);
+    expect(find.text('Landlord Kamau'), findsOneWidget);
+    expect(find.textContaining('short of what'), findsOneWidget);
   });
 
   testWidgets('Quick sort: one tap files a transaction and opens the next', (tester) async {

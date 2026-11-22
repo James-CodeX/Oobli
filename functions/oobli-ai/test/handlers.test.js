@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createGemini, extractText, parseJson } from '../src/gemini.js';
-import { categorize, normaliseAllocations, BadRequest } from '../src/handlers.js';
+import { categorize, normaliseAllocations, BadRequest, similar, search } from '../src/handlers.js';
 import main from '../src/main.js';
 
 function interaction(text) {
@@ -92,4 +92,46 @@ test('categorize keeps categories consistent with direction', async () => {
   });
   const byId = Object.fromEntries(out.results.map((r) => [r.id, r.category]));
   assert.deepEqual(byId, { 1: 'bank_withdrawal', 2: 'income', 3: 'other' });
+});
+
+test('similar keeps only names from the candidate list', async () => {
+  const { impl, calls } = fakeFetch([{
+    status: 200,
+    body: interaction('{"matches":["Embassava Sacco","Made Up Ltd"]}'),
+  }]);
+  const gemini = createGemini({ apiKey: 'k', models: ['a'], fetchImpl: impl });
+  const out = await similar(gemini, {
+    merchant: 'Super Metro',
+    category: 'transport',
+    candidates: ['Embassava Sacco', 'Naivas', 'Embassava Sacco'],
+  });
+  assert.deepEqual(out.matches, ['Embassava Sacco']);
+  assert.equal(calls.length, 1);
+});
+
+test('similar validates its input', async () => {
+  const gemini = createGemini({ apiKey: 'k', models: ['a'], fetchImpl: async () => ({}) });
+  await assert.rejects(similar(gemini, { merchant: 'x', category: 'nope', candidates: ['a'] }), BadRequest);
+  await assert.rejects(similar(gemini, { category: 'food', candidates: ['a'] }), BadRequest);
+});
+
+test('search normalises filters from the model', async () => {
+  const { impl } = fakeFetch([{
+    status: 200,
+    body: interaction(JSON.stringify({
+      from: '2026-10-01', to: 'next tuesday', categories: ['transport', 'boda'], terms: ['PIUS', ''],
+      direction: 'sideways', minAmount: -5, maxAmount: 2000, label: 'Transport · October',
+    })),
+  }]);
+  const gemini = createGemini({ apiKey: 'k', models: ['a'], fetchImpl: impl });
+  const out = await search(gemini, { query: 'boda last month', today: '2026-11-22' });
+  assert.deepEqual(out, {
+    from: '2026-10-01', to: '', categories: ['transport'], terms: ['pius'],
+    direction: 'any', minAmount: 0, maxAmount: 2000, label: 'Transport · October',
+  });
+});
+
+test('search requires a query', async () => {
+  const gemini = createGemini({ apiKey: 'k', models: ['a'], fetchImpl: async () => ({}) });
+  await assert.rejects(search(gemini, { query: '' }), BadRequest);
 });

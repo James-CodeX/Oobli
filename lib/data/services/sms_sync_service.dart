@@ -52,6 +52,7 @@ class SmsSyncService {
     required String userId,
     required DateTime since,
     required Map<String, TxCategory> rules,
+    String? ownerName,
   }) async {
     final messages = await _inbox.readFinancialMessages(since: since);
     final parsed = <ParsedTransaction>[];
@@ -77,7 +78,8 @@ class SmsSyncService {
       unique.putIfAbsent(transactionFingerprint(p), () => p);
     }
 
-    final transactions = await _categorizer.categorize(unique.values.toList(), rules: rules);
+    final transactions =
+        await _categorizer.categorize(unique.values.toList(), rules: rules, ownerName: ownerName);
     final added = await _repository.createMany(userId, transactions);
     return SyncResult(scanned: messages.length, added: added);
   }

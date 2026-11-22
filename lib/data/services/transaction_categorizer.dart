@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/money_moves.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 import 'ai_service.dart';
@@ -35,6 +36,7 @@ class TransactionCategorizer {
   Future<List<Transaction>> categorize(
     List<ParsedTransaction> items, {
     required Map<String, TxCategory> rules,
+    String? ownerName,
   }) async {
     final results = List<Transaction?>.filled(items.length, null);
     final pending = <int>[];
@@ -47,7 +49,9 @@ class TransactionCategorizer {
         final c? when c.fits(inbound: inbound) => c,
         _ => null,
       };
-      final known = ruled ?? p.category ??
+      // Sending to (or receiving from) yourself is moving your own money.
+      final self = MoneyMoves.isOwner(p.merchant, ownerName) ? TxCategory.ownTransfer : null;
+      final known = ruled ?? self ?? p.category ??
           KeywordCategorizer.categorize(merchant: p.merchant, channel: p.channel, direction: p.direction);
       if (known != null) {
         results[i] = _toTransaction(p, known, confirmed: ruled != null);

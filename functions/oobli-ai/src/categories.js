@@ -16,6 +16,7 @@ export const CATEGORIES = {
   fees: 'Fees & Charges (transaction costs, bank charges, withdrawal fees)',
   income: 'Income (salary, money received, business sales, refunds)',
   bank_withdrawal: 'Bank withdrawal (money IN only: the user moving their own money from a bank account to M-Pesa, e.g. sender is Equity, KCB, Co-op Bank, NCBA, Absa, I&M, Stanbic, Family Bank, DTB)',
+  own_transfer: "Own transfer (the user moving their OWN money: cash deposit at an agent, sending to their own number, depositing to their own bank account, money that went out and came straight back)",
   other: 'Other (anything that clearly fits none of the above)',
 };
 
@@ -34,7 +35,7 @@ export function categoryGuide() {
 
 // Categories that only make sense for money coming in.
 export const RECEIVING_ONLY = ['income', 'bank_withdrawal'];
-export const RECEIVING = [...RECEIVING_ONLY, 'savings', 'debt', 'transfer', 'other'];
+export const RECEIVING = [...RECEIVING_ONLY, 'own_transfer', 'savings', 'debt', 'transfer', 'other'];
 
 export function normaliseCategory(value, fallback = 'other') {
   return CATEGORY_KEYS.includes(value) ? value : fallback;

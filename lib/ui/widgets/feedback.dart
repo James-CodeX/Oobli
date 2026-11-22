@@ -6,12 +6,23 @@ import '../../core/theme/tokens.dart';
 import 'mascot.dart';
 import 'oobli_button.dart';
 
-void showOobliSnack(BuildContext context, String message, {bool error = false, IconData? icon}) {
+void showOobliSnack(
+  BuildContext context,
+  String message, {
+  bool error = false,
+  IconData? icon,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
   final c = context.colors;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
       backgroundColor: error ? c.error : c.surfaceVariant,
+      duration: Duration(seconds: onAction == null ? 4 : 8),
+      action: onAction == null
+          ? null
+          : SnackBarAction(label: actionLabel ?? 'Open', textColor: c.primary, onPressed: onAction),
       content: Row(
         children: [
           Icon(icon ?? (error ? Icons.error_outline_rounded : Icons.auto_awesome_rounded),

@@ -9,6 +9,10 @@ import '../data/repositories/merchant_rule_repository.dart';
 import '../data/repositories/transaction_repository.dart';
 import '../data/services/sms_inbox_service.dart';
 import '../data/services/sms_sync_service.dart';
+import '../data/services/ai_service.dart';
+import '../domain/bills.dart';
+import '../domain/money_moves.dart';
+import '../domain/similar_merchants.dart';
 import '../domain/spending_stats.dart';
 import 'auth_controller.dart';
 import 'preferences.dart';
@@ -25,6 +29,13 @@ final statsProvider = Provider<SpendingStats>(
 final unsortedCountProvider = Provider<int>(
   (ref) => (ref.watch(transactionsProvider).value ?? const []).where((t) => !t.confirmed).length,
 );
+
+/// Repeating payments due in the next two weeks, plus the last known balance.
+final billForecastProvider = Provider<BillForecast>((ref) {
+  final txs = ref.watch(transactionsProvider).value;
+  if (txs == null || txs.isEmpty) return BillForecast.empty;
+  return BillPredictor.forecast(txs, now: DateTime.now());
+});
 
 final merchantRulesProvider =
     AsyncNotifierProvider<MerchantRulesController, Map<String, TxCategory>>(MerchantRulesController.new);
@@ -156,6 +167,66 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
     }
   }
 
+  /// Marks out-and-back round trips (refunds, money returned) as Own transfer
+  /// so they stop counting as spending and income. They stay unconfirmed and
+  /// show up in Quick sort, so the user has the final say. Returns the count.
+  Future<int> detectMoneyMoves() async {
+    final moves = MoneyMoves.roundTrips(_current);
+    if (moves.isEmpty) return 0;
+    final changed = {
+      for (final m in moves)
+        for (final t in m.both) t.id: t.copyWith(category: TxCategory.ownTransfer, aiCategorized: true, confirmed: false),
+    };
+    final before = {for (final t in _current) if (changed.containsKey(t.id)) t.id: t};
+    _set([for (final t in _current) changed[t.id] ?? t]);
+    try {
+      final userId = _userId;
+      for (final t in changed.values) {
+        await _repo.update(userId, t);
+      }
+      return changed.length;
+    } catch (e) {
+      _set([for (final t in _current) before[t.id] ?? t]);
+      debugPrint('Could not save money moves: $e');
+      return 0;
+    }
+  }
+
+  /// Other merchants that probably belong in [category] too, after the user
+  /// filed [tx] there: name matches instantly, plus the AI's picks when online.
+  Future<List<MerchantGroup>> similarTo(Transaction tx, TxCategory category) async {
+    if (!canLearn(tx, category)) return const [];
+    final candidates = SimilarMerchants.candidates(_current, tx, category);
+    if (candidates.isEmpty) return const [];
+    final picked = {for (final g in SimilarMerchants.byName(candidates, tx)) g.key: g};
+    final rest = candidates.where((g) => !picked.containsKey(g.key)).toList();
+    if (rest.isNotEmpty) {
+      try {
+        final names = await ref
+            .read(aiServiceProvider)
+            .similar(merchant: tx.merchant, category: category, candidates: [for (final g in rest) g.merchant])
+            .timeout(const Duration(seconds: 10));
+        final wanted = names.toSet();
+        for (final g in rest) {
+          if (wanted.contains(g.merchant)) picked[g.key] = g;
+        }
+      } catch (e) {
+        debugPrint('AI similar-merchant lookup unavailable: $e');
+      }
+    }
+    return picked.values.toList()..sort((a, b) => b.count.compareTo(a.count));
+  }
+
+  /// Files every transaction of [groups] under [category] and learns a rule
+  /// per merchant. Returns how many transactions changed.
+  Future<int> fileMerchants(List<MerchantGroup> groups, TxCategory category, {required TxDirection direction}) async {
+    var changed = 0;
+    for (final g in groups) {
+      changed += await recategorizeMerchant(g.merchant, category, direction: direction);
+    }
+    return changed;
+  }
+
   /// Merchant rules are shared by both directions, so money received only
   /// teaches categories that can never apply to spending (Income, Bank
   /// withdrawal). Otherwise receiving from John would relabel paying John.
@@ -246,8 +317,11 @@ class SmsSyncController extends Notifier<SyncState> {
             userId: profile.id,
             since: since,
             rules: rules,
+            ownerName: profile.name,
           );
-      ref.read(transactionsProvider.notifier)._merge(result.added);
+      final transactions = ref.read(transactionsProvider.notifier);
+      transactions._merge(result.added);
+      if (result.added.isNotEmpty) await transactions.detectMoneyMoves();
       await ref.read(authControllerProvider.notifier).updateProfile(
             (p) => p.copyWith(smsSyncEnabled: true, lastSmsSyncAt: DateTime.now()),
           );

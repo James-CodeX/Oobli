@@ -7,6 +7,8 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/transaction.dart';
+import '../../data/services/ai_service.dart';
+import '../../domain/natural_search.dart';
 import '../../state/insights_controller.dart';
 import '../../state/transactions_controller.dart';
 import '../../ui/widgets/feedback.dart';
@@ -41,20 +43,70 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   late final _search = TextEditingController(text: widget.initialQuery ?? '');
   late bool _searching = widget.initialQuery?.isNotEmpty ?? false;
 
+  /// The structured reading of the last submitted search, if any.
+  SearchFilter? _smart;
+  bool _thinking = false;
+  int _searchSeq = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final q = widget.initialQuery;
+    if (q != null && q.trim().contains(' ')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _smartSearch(q));
+    }
+  }
+
+  /// Reads the query offline at once, then lets the AI refine it.
+  Future<void> _smartSearch(String raw) async {
+    final q = raw.trim();
+    if (q.isEmpty) return;
+    final seq = ++_searchSeq;
+    final words = q.split(RegExp(r'\s+')).length;
+    setState(() {
+      _smart = NaturalSearch.parse(q);
+      _thinking = words >= 2;
+    });
+    if (words < 2) return;
+    try {
+      final ai = await ref.read(aiServiceProvider).search(q).timeout(const Duration(seconds: 10));
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        if (ai != null) _smart = ai;
+        _thinking = false;
+      });
+    } catch (_) {
+      // Offline or slow: keep the on-device reading.
+      if (mounted && seq == _searchSeq) setState(() => _thinking = false);
+    }
+  }
+
+  void _clearSmart() => setState(() {
+        _searchSeq++;
+        _smart = null;
+        _thinking = false;
+      });
+
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
   }
 
-  List<_Item> _items(List<Transaction> txs) {
+  Iterable<Transaction> _filtered(List<Transaction> txs) {
+    final smart = _smart;
+    if (smart != null) return txs.where(smart.matches);
     final q = _search.text.trim().toLowerCase();
-    final filtered = q.isEmpty
+    return q.isEmpty
         ? txs
         : txs.where((t) =>
             t.merchant.toLowerCase().contains(q) ||
             t.category.label.toLowerCase().contains(q) ||
             (t.reference?.toLowerCase().contains(q) ?? false));
+  }
+
+  List<_Item> _items(List<Transaction> txs) {
+    final filtered = _filtered(txs);
     final items = <_Item>[];
     String? current;
     for (final tx in filtered) {
@@ -137,11 +189,18 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                         key: const ValueKey('search'),
                                         controller: _search,
                                         autofocus: widget.initialQuery == null,
-                                        onChanged: (_) => setState(() {}),
+                                        textInputAction: TextInputAction.search,
+                                        onChanged: (_) => setState(() {
+                                          // Typing again goes back to plain matching until submitted.
+                                          _searchSeq++;
+                                          _smart = null;
+                                          _thinking = false;
+                                        }),
+                                        onSubmitted: _smartSearch,
                                         style: t.bodyLarge,
                                         decoration: InputDecoration(
                                           border: InputBorder.none,
-                                          hintText: 'Search merchant, category, code',
+                                          hintText: "Try 'boda last month' or 'Naivas'",
                                           hintStyle: t.bodyLarge.copyWith(color: c.hint),
                                         ),
                                       )
@@ -163,7 +222,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                               tooltip: _searching ? 'Close search' : 'Search',
                               onPressed: () => setState(() {
                                 _searching = !_searching;
-                                if (!_searching) _search.clear();
+                                if (!_searching) {
+                                  _search.clear();
+                                  _clearSmart();
+                                }
                               }),
                             ),
                           ],
@@ -187,6 +249,13 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   ),
                 ),
               ),
+              if (_searching && (_smart != null || _thinking))
+                _SearchSummary(
+                  filter: _smart,
+                  thinking: _thinking,
+                  matches: _filtered(txs.value ?? const []).toList(),
+                  onClear: _clearSmart,
+                ),
               Expanded(
                 child: txs.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
@@ -256,6 +325,70 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 ),
               ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "KES 3,450 spent · 12 transactions" for a plain-English search, with what
+/// Oobli understood, so the user can trust (or clear) the reading.
+class _SearchSummary extends StatelessWidget {
+  const _SearchSummary({required this.filter, required this.thinking, required this.matches, required this.onClear});
+
+  final SearchFilter? filter;
+  final bool thinking;
+  final List<Transaction> matches;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = context.text;
+    final spent = matches.where((x) => x.isOutgoing).fold<double>(0, (s, x) => s + x.amount);
+    final received = matches.where((x) => !x.isOutgoing).fold<double>(0, (s, x) => s + x.amount);
+    final f = filter;
+    final totals = [
+      if (spent > 0 || received == 0) '${Fmt.kes(spent)} spent',
+      if (received > 0) '${Fmt.kes(received)} received',
+      '${matches.length} ${matches.length == 1 ? 'transaction' : 'transactions'}',
+    ].join(' · ');
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, 0),
+      padding: const EdgeInsets.fromLTRB(Sp.md, Sp.sm, Sp.xs, Sp.sm),
+      decoration: BoxDecoration(
+        color: c.primary.withValues(alpha: 0.1),
+        borderRadius: Rad.all(Rad.lg),
+        border: Border.all(color: c.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome_rounded, size: 18, color: c.primary),
+          const SizedBox(width: Sp.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(f == null ? 'Reading your question…' : totals, style: t.titleSmall),
+                Text(
+                  [
+                    if (f != null && f.label.isNotEmpty) f.label,
+                    if (thinking) 'Oobli is refining…' else if (f?.fromAi ?? false) 'Understood by Oobli AI',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.labelSmall.copyWith(color: c.secondaryText, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          if (thinking)
+            Padding(
+              padding: const EdgeInsets.all(Sp.sm),
+              child: SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+            ),
+          OobliIconButton(icon: Icons.close_rounded, size: 18, tooltip: 'Clear', onPressed: onClear),
         ],
       ),
     );

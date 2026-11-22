@@ -11,6 +11,8 @@ import '../appwrite/appwrite_providers.dart';
 import '../models/ai_models.dart';
 import '../models/category.dart';
 import '../models/plan.dart';
+import '../models/transaction.dart';
+import '../../domain/natural_search.dart';
 import 'sms_parser.dart';
 
 final aiServiceProvider = Provider<AiService>((ref) => AiService(ref.watch(functionsProvider)));
@@ -108,6 +110,53 @@ class AiService {
       }
     }
     return out;
+  }
+
+  /// Of [candidates] (merchant names), which belong in [category] like
+  /// [merchant] does. Used to offer "file these similar ones too".
+  Future<List<String>> similar({
+    required String merchant,
+    required TxCategory category,
+    required List<String> candidates,
+  }) async {
+    if (candidates.isEmpty) return const [];
+    final res = await _call('/similar', {
+      'merchant': merchant,
+      'category': category.key,
+      'candidates': candidates.take(80).toList(),
+    });
+    return (res['matches'] as List? ?? []).whereType<String>().toList();
+  }
+
+  /// Turns a plain-English search ("boda last month") into filters.
+  Future<SearchFilter?> search(String query, {DateTime? now}) async {
+    final today = now ?? DateTime.now();
+    final res = await _call('/search', {
+      'query': query,
+      'today': '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}',
+      'weekday': today.weekday,
+    });
+    DateTime? date(Object? v) => v is String && v.isNotEmpty ? DateTime.tryParse(v) : null;
+    double? amount(Object? v) => v is num && v > 0 ? v.toDouble() : null;
+    final filter = SearchFilter(
+      from: date(res['from']),
+      to: date(res['to']),
+      categories: {
+        for (final k in (res['categories'] as List? ?? []).whereType<String>())
+          if (TxCategory.values.any((c) => c.key == k)) TxCategory.fromKey(k),
+      },
+      terms: [for (final t in (res['terms'] as List? ?? []).whereType<String>()) if (t.trim().isNotEmpty) t.toLowerCase().trim()],
+      direction: switch (res['direction']) {
+        'in' => TxDirection.inbound,
+        'out' => TxDirection.out,
+        _ => null,
+      },
+      minAmount: amount(res['minAmount']),
+      maxAmount: amount(res['maxAmount']),
+      label: res['label'] as String? ?? query,
+      fromAi: true,
+    );
+    return filter.isEmpty ? null : filter;
   }
 
   Future<AiInsights> insights(Map<String, dynamic> stats) async =>

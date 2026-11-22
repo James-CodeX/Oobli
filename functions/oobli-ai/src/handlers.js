@@ -1,4 +1,5 @@
 import {
+  CATEGORIES,
   CATEGORY_KEYS,
   CHANNELS,
   categoryGuide,
@@ -64,7 +65,8 @@ Category keys:
 ${categoryGuide()}
 
 Rules:
-- Incoming money (direction "in") can only be: "income", "bank_withdrawal", "debt" (loan disbursement), "savings" (savings withdrawal), "transfer" or "other".
+- Incoming money (direction "in") can only be: "income", "bank_withdrawal", "own_transfer", "debt" (loan disbursement), "savings" (savings withdrawal), "transfer" or "other".
+- Outgoing money to a bank paybill (Equity, KCB, Co-op...) is usually the user depositing to their own account: "own_transfer" (confidence < 0.7), unless it is clearly a loan repayment ("debt").
 - Incoming money from a bank (bank name, "Bank", Pesalink) is "bank_withdrawal": the user moved their own money, it is NOT income.
 - Bank "bulk"/B2C accounts are ambiguous: employers pay salaries through them. A large, round, month-start amount is likely "income"; otherwise "bank_withdrawal". Use confidence < 0.6 when unsure.
 - "income" and "bank_withdrawal" are never valid for outgoing money (direction "out").
@@ -416,4 +418,93 @@ If they ask for something outside personal finance, gently steer back.`;
 
   const reply = await gemini.generate({ system: PERSONA, input });
   return { reply: clip(reply, 1500) };
+}
+
+// ---------- /similar ----------
+
+/** Which candidate merchants belong in the same category as the example. */
+export async function similar(gemini, body) {
+  const merchant = clip(body.merchant, 160);
+  if (!merchant) throw new BadRequest('"merchant" is required');
+  const category = normaliseCategory(body.category, '');
+  if (!category) throw new BadRequest('"category" must be a category key');
+  const candidates = [...new Set(requireArray(body.candidates, 'candidates', 80).map((c) => clip(c, 120)).filter(Boolean))];
+
+  const input = `The user just filed "${merchant}" under "${category}" (${CATEGORIES[category]}).
+
+From the merchant names below, pick ONLY the ones that are the same kind of business or payee and clearly belong in "${category}" too
+(for example other branches of the same chain, other matatu SACCOs, other pharmacies). When unsure, leave it out.
+People's personal names only match if the example is also a person and the category is about people.
+
+Candidates (JSON):
+${compact(candidates)}`;
+
+  const result = await gemini.generate({
+    system: PERSONA,
+    input,
+    schema: {
+      type: 'object',
+      properties: { matches: { type: 'array', items: { type: 'string' } } },
+      required: ['matches'],
+    },
+  });
+  const allowed = new Set(candidates);
+  return { matches: (result.matches ?? []).filter((m) => allowed.has(m)) };
+}
+
+// ---------- /search ----------
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Turns a plain-English question into transaction filters. */
+export async function search(gemini, body) {
+  const query = clip(body.query, 200);
+  if (!query) throw new BadRequest('"query" is required');
+  const today = ISO_DATE.test(body.today ?? '') ? body.today : new Date().toISOString().slice(0, 10);
+
+  const input = `Today is ${today}. Convert the user's search over their M-Pesa transactions into filters.
+
+Category keys:
+${categoryGuide()}
+
+Rules:
+- from is inclusive, to is EXCLUSIVE, both YYYY-MM-DD, or "" when the search has no time limit. "last month" = the whole previous calendar month. Weeks start on Monday.
+- Map everyday words to categories (boda, matatu, fare, fuel -> transport; lunch -> food; KPLC, tokens -> utilities; Netflix -> entertainment).
+- terms are lowercase words to find in merchant names (e.g. "naivas", "pius"). Do not repeat words already captured by a category or date.
+- direction: "out" for spending, "in" for money received, "any" otherwise.
+- minAmount / maxAmount in KES, 0 when not given.
+- label: a short human summary like "Transport · October".
+
+Search: ${JSON.stringify(query)}`;
+
+  const result = await gemini.generate({
+    system: PERSONA,
+    input,
+    schema: {
+      type: 'object',
+      properties: {
+        from: { type: 'string' },
+        to: { type: 'string' },
+        categories: { type: 'array', items: { type: 'string', enum: CATEGORY_KEYS } },
+        terms: { type: 'array', items: { type: 'string' } },
+        direction: { type: 'string', enum: ['in', 'out', 'any'] },
+        minAmount: { type: 'number' },
+        maxAmount: { type: 'number' },
+        label: { type: 'string' },
+      },
+      required: ['from', 'to', 'categories', 'terms', 'direction', 'minAmount', 'maxAmount', 'label'],
+    },
+  });
+
+  const date = (v) => (ISO_DATE.test(v ?? '') ? v : '');
+  return {
+    from: date(result.from),
+    to: date(result.to),
+    categories: (result.categories ?? []).filter((c) => CATEGORY_KEYS.includes(c)),
+    terms: (result.terms ?? []).map((t) => clip(String(t).toLowerCase(), 40)).filter(Boolean).slice(0, 6),
+    direction: ['in', 'out'].includes(result.direction) ? result.direction : 'any',
+    minAmount: Math.max(0, num(result.minAmount)),
+    maxAmount: Math.max(0, num(result.maxAmount)),
+    label: clip(result.label, 80) || query,
+  };
 }

@@ -15,6 +15,10 @@ Flutter app (Android)                    Appwrite Cloud (sgp, project 6b012dd800
 
 - **No secrets in the app.** Gemini is only called from the `oobli-ai` Appwrite Function; the key is a secret function variable (`GEMINI_API_KEY`). The function rejects anonymous executions.
 - **Categorisation pipeline:** user corrections (merchant rules) → message-type/keyword rules (offline) → Gemini for the rest. Correcting a category teaches Oobli for that merchant.
+- **Own money moves:** cash deposits, sending to yourself and out-and-back round trips (refunds, money returned) are filed as *Own transfer* and excluded from spending and income (`lib/domain/money_moves.dart`).
+- **Similar merchants:** after a correction, Oobli offers to file similar merchants the same way (name matches offline, plus the AI's `/similar` picks).
+- **Upcoming bills:** repeating payments are detected on-device (`lib/domain/bills.dart`) and shown as "Coming up" on the dashboard, with a warning when the last M-Pesa balance won't cover this week.
+- **Plain-English search:** Activity understands queries like "boda last month" (offline parser in `lib/domain/natural_search.dart`, refined by the AI's `/search`).
 - **De-duplication:** each transaction has a fingerprint (M-Pesa code + amount + direction); a unique index makes re-syncs idempotent.
 - **Offline resilience:** every AI surface has a rule-based fallback (`lib/domain/local_insights.dart`), so the app never shows an empty "Oobli says…".
 

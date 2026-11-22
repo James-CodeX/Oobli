@@ -16,6 +16,7 @@ import '../../ui/widgets/mascot.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/tiles.dart';
+import 'similar_sheet.dart';
 import 'transaction_editor_sheet.dart';
 import 'transaction_widgets.dart';
 
@@ -88,9 +89,12 @@ class _QuickSortScreenState extends ConsumerState<QuickSortScreen> {
         .read(transactionsProvider.notifier)
         .quickCategorize(tx, category, remember: _remember)
         .then((count) {
-      if (mounted && count > 1) {
+      if (!mounted) return;
+      if (count > 1) {
         showOobliSnack(context, '${tx.merchant}: ${count - 1} more filed under ${category.label}');
       }
+      // A correction may apply to other merchants too ("other matatu SACCOs").
+      if (category != tx.category) offerSimilar(context, tx, category);
     }).catchError((Object e) {
       if (!mounted) return;
       showFailure(context, e);

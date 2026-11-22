@@ -42,8 +42,9 @@ class Transaction {
 
   bool get isOutgoing => direction == TxDirection.out;
 
-  /// Money that counts as spending (excludes moving money into savings).
-  bool get isSpend => isOutgoing && category != TxCategory.savings;
+  /// Money that counts as spending (excludes moving money into savings or
+  /// between the user's own accounts).
+  bool get isSpend => isOutgoing && category != TxCategory.savings && category != TxCategory.ownTransfer;
 
   /// Needs the user's confirmation: AI picked the category and nobody checked it.
   bool get needsReview => aiCategorized && !confirmed;

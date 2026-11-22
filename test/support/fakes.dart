@@ -16,6 +16,8 @@ import 'package:oobli/core/errors/app_failure.dart';
 import 'package:oobli/core/theme/oobli_colors.dart';
 import 'package:oobli/data/repositories/merchant_rule_repository.dart';
 import 'package:oobli/data/repositories/transaction_repository.dart';
+import 'package:oobli/data/services/ai_service.dart';
+import 'package:oobli/domain/natural_search.dart';
 import 'package:oobli/domain/local_insights.dart';
 import 'package:oobli/domain/spending_stats.dart';
 import 'package:oobli/state/auth_controller.dart';
@@ -188,6 +190,19 @@ class FakeInsights extends InsightsController {
   }
 }
 
+/// AI double for screen tests: answers instantly and never touches the network.
+class OfflineAi implements AiService {
+  @override
+  Future<List<String>> similar({required String merchant, required TxCategory category, required List<String> candidates}) async =>
+      const [];
+
+  @override
+  Future<SearchFilter?> search(String query, {DateTime? now}) async => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 /// Records category writes; set [fail] to make them throw.
 class FakeTxRepo implements TransactionRepository {
   final writes = <String, TxCategory>{};
@@ -198,6 +213,14 @@ class FakeTxRepo implements TransactionRepository {
     await Future<void>.delayed(Duration.zero);
     if (fail) throw const AppFailure('Network down');
     writes[txId] = category;
+  }
+
+  @override
+  Future<Transaction> update(String userId, Transaction tx) async {
+    await Future<void>.delayed(Duration.zero);
+    if (fail) throw const AppFailure('Network down');
+    writes[tx.id] = tx.category;
+    return tx;
   }
 
   @override
@@ -221,6 +244,7 @@ Future<List<Override>> overrides({
   FakeRuleRepo? ruleRepo,
   Map<String, Object> prefs = const {},
   bool signedIn = true,
+  AiService? ai,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   final store = await SharedPreferences.getInstance();
@@ -235,6 +259,7 @@ Future<List<Override>> overrides({
     merchantRulesProvider.overrideWith(FakeRules.new),
     transactionRepositoryProvider.overrideWithValue(txRepo ?? FakeTxRepo()),
     merchantRuleRepositoryProvider.overrideWithValue(ruleRepo ?? FakeRuleRepo()),
+    aiServiceProvider.overrideWithValue(ai ?? OfflineAi()),
     insightsProvider.overrideWith(FakeInsights.new),
     wrappedProvider.overrideWith((ref) async {
       final stats = SpendingStats(txs);

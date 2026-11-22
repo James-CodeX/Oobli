@@ -14,6 +14,7 @@ import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/tiles.dart';
+import '../../domain/bills.dart';
 import '../../domain/spending_stats.dart';
 import '../analytics/channel_slices.dart';
 import '../assistant/ask_oobli_sheet.dart';
@@ -33,9 +34,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
     // Quietly pull in new M-Pesa messages every time the feed opens.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (ref.read(authControllerProvider).value?.smsSyncEnabled ?? false) {
-        ref.read(smsSyncControllerProvider.notifier).sync(silent: true);
+        await ref.read(smsSyncControllerProvider.notifier).sync(silent: true);
+      }
+      // Catch refunds and money that came straight back in older history too.
+      try {
+        await ref.read(transactionsProvider.future);
+        if (mounted) await ref.read(transactionsProvider.notifier).detectMoneyMoves();
+      } catch (_) {
+        // The feed shows its own error state.
       }
     });
   }
@@ -94,6 +102,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     : [
                         const SliverToBoxAdapter(child: _SortBanner()),
                         const SliverToBoxAdapter(child: _TodayFlowCard()),
+                        const SliverToBoxAdapter(child: _BillsCard()),
                         const SliverToBoxAdapter(child: _DistributionCard()),
                         const SliverToBoxAdapter(child: _RecentList()),
                       ],
@@ -252,6 +261,106 @@ class _TodayFlowCard extends ConsumerWidget {
               FlowBarChart(points: stats.lastDays(7)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Predicted repeating payments for the next two weeks, with a warning when
+/// the last known M-Pesa balance won't cover what's due this week.
+class _BillsCard extends ConsumerWidget {
+  const _BillsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = context.text;
+    final forecast = ref.watch(billForecastProvider);
+    final today = forecast.today;
+    if (forecast.upcoming.isEmpty || today == null) return const SizedBox.shrink();
+    final shortfall = forecast.shortfall();
+
+    String when(Bill b) => switch (b.daysUntil(today)) {
+          < 0 => 'Overdue · usually ${Fmt.shortDate(b.nextDue)}',
+          0 => 'Due today',
+          1 => 'Due tomorrow',
+          final d => 'In $d days · ${Fmt.weekdayName(b.nextDue)}',
+        };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, Sp.lg),
+      child: OobliCard(
+        padding: const EdgeInsets.all(Sp.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.event_repeat_rounded, size: 18, color: c.secondary),
+                const SizedBox(width: Sp.sm),
+                Expanded(child: Text('Coming up', style: t.titleMedium)),
+                Text(Fmt.kes(forecast.dueWithin(14)), style: t.labelLarge.copyWith(color: c.secondaryText)),
+              ],
+            ),
+            if (shortfall != null) ...[
+              const SizedBox(height: Sp.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: Sp.sm),
+                decoration: BoxDecoration(
+                  color: c.warning.withValues(alpha: 0.14),
+                  borderRadius: Rad.all(Rad.md),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 18, color: c.warning),
+                    const SizedBox(width: Sp.sm),
+                    Expanded(
+                      child: Text(
+                        'Your balance (${Fmt.kes(forecast.balance!)}) is ${Fmt.kes(shortfall)} short of what\'s due this week.',
+                        style: t.labelMedium.copyWith(color: c.primaryText),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: Sp.xs),
+            for (final b in forecast.upcoming.take(3))
+              Padding(
+                padding: const EdgeInsets.only(top: Sp.sm),
+                child: Row(
+                  children: [
+                    ToneTile(icon: b.category.icon, tone: b.category.tone, size: 32, radius: Rad.sm, soft: true),
+                    const SizedBox(width: Sp.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(b.merchant, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleSmall),
+                          Text(
+                            when(b),
+                            style: t.labelSmall.copyWith(
+                              color: b.daysUntil(today) <= 1 ? c.warning : c.secondaryText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text('~${Fmt.kes(b.amount)}', style: t.titleSmall),
+                  ],
+                ),
+              ),
+            if (forecast.upcoming.length > 3)
+              Padding(
+                padding: const EdgeInsets.only(top: Sp.sm),
+                child: Text(
+                  '+${forecast.upcoming.length - 3} more in the next two weeks',
+                  style: t.labelSmall.copyWith(color: c.secondaryText),
+                ),
+              ),
+          ],
         ),
       ),
     );

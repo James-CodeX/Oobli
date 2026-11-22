@@ -8,6 +8,8 @@ const ROUTES = {
   '/plan': handlers.plan,
   '/wrapped': handlers.wrapped,
   '/chat': handlers.chat,
+  '/similar': handlers.similar,
+  '/search': handlers.search,
 };
 
 function models() {

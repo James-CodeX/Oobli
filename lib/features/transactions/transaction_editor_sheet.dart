@@ -12,15 +12,23 @@ import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/oobli_text_field.dart';
 import '../../ui/widgets/pressable.dart';
+import 'similar_sheet.dart';
 import 'transaction_widgets.dart';
 
-/// Opens the add/edit transaction sheet. Pass [tx] to edit.
-Future<void> showTransactionEditor(BuildContext context, {Transaction? tx}) => showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => TransactionEditorSheet(tx: tx),
-    );
+/// A category correction made in the editor.
+typedef CategoryChange = ({Transaction tx, TxCategory category});
+
+/// Opens the add/edit transaction sheet. Pass [tx] to edit. After a category
+/// correction, offers to file similar merchants the same way.
+Future<void> showTransactionEditor(BuildContext context, {Transaction? tx}) async {
+  final change = await showModalBottomSheet<CategoryChange>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) => TransactionEditorSheet(tx: tx),
+  );
+  if (change != null && context.mounted) await offerSimilar(context, change.tx, change.category);
+}
 
 class TransactionEditorSheet extends ConsumerStatefulWidget {
   const TransactionEditorSheet({super.key, this.tx});
@@ -80,6 +88,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
     }
     setState(() => _saving = true);
     final controller = ref.read(transactionsProvider.notifier);
+    CategoryChange? change;
     try {
       if (_editing) {
         final before = widget.tx!;
@@ -92,6 +101,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
           note: _note.text.trim(),
         );
         await controller.edit(before, after, applyToMerchant: _learn && before.category != _category);
+        change = before.category != _category ? (tx: after, category: _category) : null;
       } else {
         await controller.add(
           Transaction(
@@ -112,7 +122,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
       }
       if (mounted) {
         HapticFeedback.mediumImpact();
-        Navigator.pop(context);
+        Navigator.pop(context, change);
         showOobliSnack(context, _editing ? 'Updated. Oobli will remember that.' : 'Transaction added');
       }
     } catch (e) {

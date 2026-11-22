@@ -5,6 +5,7 @@ import '../data/models/category.dart';
 import '../data/models/goal.dart';
 import '../data/models/plan.dart';
 import '../data/models/transaction.dart';
+import 'bills.dart';
 
 enum FlowRange {
   week('This Week'),
@@ -300,6 +301,10 @@ class SpendingStats {
       'recurringCharges': [
         for (final r in recurringCharges())
           {'merchant': r.merchant, 'amount': r.amount, 'lastCharged': Fmt.shortDate(r.last)},
+      ],
+      'upcomingBills': [
+        for (final b in BillPredictor.forecast(all, now: now).upcoming.take(5))
+          {'merchant': b.merchant, 'amount': b.amount.roundToDouble(), 'due': Fmt.shortDate(b.nextDue), 'cadence': b.cadence.label},
       ],
       if (primaryGoal != null)
         'primaryGoal': {
