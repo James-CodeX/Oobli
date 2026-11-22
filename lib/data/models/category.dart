@@ -19,6 +19,7 @@ enum TxCategory {
   debt('debt', 'Debt & Loans', Icons.local_fire_department_rounded, Tone.error),
   fees('fees', 'Fees & Charges', Icons.receipt_long_rounded, Tone.neutral),
   income('income', 'Income', Icons.south_west_rounded, Tone.primary),
+  bankWithdrawal('bank_withdrawal', 'Bank withdrawal', Icons.account_balance_rounded, Tone.info),
   other('other', 'Other', Icons.category_rounded, Tone.neutral);
 
   const TxCategory(this.key, this.label, this.icon, this.tone);
@@ -33,7 +34,17 @@ enum TxCategory {
 
   /// Categories a user can pick for money going out.
   static List<TxCategory> get spending =>
-      values.where((c) => c != TxCategory.income).toList();
+      values.where((c) => c != income && c != bankWithdrawal).toList();
+
+  /// Categories a user can pick for money coming in.
+  static const receiving = [income, bankWithdrawal, savings, debt, transfer, other];
+
+  /// Whether this category makes sense for money in ([inbound]) or out.
+  bool fits({required bool inbound}) => inbound ? receiving.contains(this) : this != income && this != bankWithdrawal;
+
+  /// Only ever used for money coming in, so a rule learned for it can never
+  /// relabel spending.
+  bool get receivingOnly => this == income || this == bankWithdrawal;
 
   /// Which plan bucket this category draws from.
   PlanBucket get bucket => switch (this) {
@@ -41,7 +52,7 @@ enum TxCategory {
         airtime || fees || debt =>
           PlanBucket.needs,
         savings => PlanBucket.savings,
-        income => PlanBucket.none,
+        income || bankWithdrawal => PlanBucket.none,
         _ => PlanBucket.flex,
       };
 }

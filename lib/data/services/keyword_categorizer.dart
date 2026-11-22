@@ -32,6 +32,18 @@ abstract final class KeywordCategorizer {
     TxCategory.airtime: _r(r'airtime|bundles?|safaricom data'),
   };
 
+  /// Money received from a bank is the user moving their own money into
+  /// M-Pesa, not income. "Bulk account" senders are left to the AI: employers
+  /// pay salaries through them too.
+  static final _bank = _r(r'\bbank\b|\bequity\b|\bkcb\b(?! ?m-?pesa)|co-?op(erative)?|\bncba\b|'
+      r'\babsa\b|stanbic|stan ?chart|standard chartered|\bi ?& ?m\b|\bdtb\b|diamond trust|'
+      r'family bank|sidian|\bhf ?group\b|housing finance|gulf african|\bnbk\b|\bboa\b|'
+      r'credit bank|\bloop\b|pesalink|prime bank|\bpostbank\b');
+  static final _loanIn = _r(r'fuliza|kcb m-?pesa|\btala\b|\bbranch\b|zenka|okash|hustler fund|'
+      r'\bloan\b|m-?shwari loan');
+  static final _savingsIn = _r(r'm-?shwari|m-?mali|money market|\bmmf\b|ziidi|\bsacco\b');
+  static final _bulk = _r(r'bulk|b2c|disburse');
+
   static RegExp _r(String pattern) => RegExp(pattern, caseSensitive: false);
 
   /// Returns a category, or `null` when the AI should decide.
@@ -40,11 +52,19 @@ abstract final class KeywordCategorizer {
     required TxChannel channel,
     required TxDirection direction,
   }) {
-    if (direction == TxDirection.inbound) return TxCategory.income;
+    if (direction == TxDirection.inbound) return _receiving(merchant);
     if (channel == TxChannel.airtime) return TxCategory.airtime;
     for (final entry in _rules.entries) {
       if (entry.value.hasMatch(merchant)) return entry.key;
     }
+    return null;
+  }
+
+  static TxCategory? _receiving(String sender) {
+    if (_loanIn.hasMatch(sender)) return TxCategory.debt;
+    if (_savingsIn.hasMatch(sender)) return TxCategory.savings;
+    if (_bulk.hasMatch(sender)) return null; // salary or bank app transfer: AI decides
+    if (_bank.hasMatch(sender)) return TxCategory.bankWithdrawal;
     return null;
   }
 }

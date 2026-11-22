@@ -15,6 +15,7 @@ export const CATEGORIES = {
   debt: 'Debt & Loans (Fuliza, M-Shwari/KCB-M-Pesa loan repayment, Tala, Branch)',
   fees: 'Fees & Charges (transaction costs, bank charges, withdrawal fees)',
   income: 'Income (salary, money received, business sales, refunds)',
+  bank_withdrawal: 'Bank withdrawal (money IN only: the user moving their own money from a bank account to M-Pesa, e.g. sender is Equity, KCB, Co-op Bank, NCBA, Absa, I&M, Stanbic, Family Bank, DTB)',
   other: 'Other (anything that clearly fits none of the above)',
 };
 
@@ -31,6 +32,17 @@ export function categoryGuide() {
     .join('\n');
 }
 
+// Categories that only make sense for money coming in.
+export const RECEIVING_ONLY = ['income', 'bank_withdrawal'];
+export const RECEIVING = [...RECEIVING_ONLY, 'savings', 'debt', 'transfer', 'other'];
+
 export function normaliseCategory(value, fallback = 'other') {
   return CATEGORY_KEYS.includes(value) ? value : fallback;
+}
+
+/** Keeps a category consistent with the money's direction ("in" or "out"). */
+export function categoryForDirection(value, direction) {
+  const key = normaliseCategory(value);
+  if (direction === 'in') return RECEIVING.includes(key) ? key : 'income';
+  return RECEIVING_ONLY.includes(key) ? 'other' : key;
 }

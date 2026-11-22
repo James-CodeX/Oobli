@@ -172,8 +172,11 @@ abstract final class MpesaParser {
       result = build(m.group(1), recipient, isPerson ? TxChannel.send : TxChannel.pochi,
           TxDirection.out);
     } else if ((m = _received.firstMatch(body)) != null) {
-      result = build(m!.group(1), m.group(2)!, TxChannel.received, TxDirection.inbound,
-          category: TxCategory.income);
+      // From a person (has a phone number): income. From a business or bank:
+      // let the categoriser decide (bank withdrawal, loan, salary...).
+      final sender = m!.group(2)!;
+      result = build(m.group(1), sender, TxChannel.received, TxDirection.inbound,
+          category: _phone.hasMatch(sender) ? TxCategory.income : null);
     } else if ((m = _withdraw.firstMatch(body)) != null) {
       final agent = m!.group(2)!;
       final name = agent.contains(' - ') ? agent.split(' - ').last : agent;

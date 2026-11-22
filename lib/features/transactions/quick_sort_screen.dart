@@ -74,8 +74,8 @@ class _QuickSortScreenState extends ConsumerState<QuickSortScreen> {
     final autoSorted = <String, Transaction>{
       for (final e in byId.entries)
         e.key: _remember &&
-                tx.isOutgoing &&
-                e.value.isOutgoing &&
+                TransactionsController.canLearn(tx, category) &&
+                e.value.direction == tx.direction &&
                 !e.value.confirmed &&
                 Transaction.merchantKey(e.value.merchant) == key
             ? e.value.copyWith(confirmed: true)
@@ -231,7 +231,7 @@ class _Header extends StatelessWidget {
                           children: [
                             Text('Remember for this merchant', style: t.labelLarge),
                             Text(
-                              'Also sorts their other spends and future ones',
+                              'Also sorts their other transactions and future ones',
                               style: t.labelSmall.copyWith(color: c.secondaryText),
                             ),
                           ],

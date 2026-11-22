@@ -61,6 +61,16 @@ void main() {
       expect(p.merchant, 'Jane Wanjiku');
     });
 
+    test('leaves money from a bank or business for the categoriser', () {
+      final p = MpesaParser.parse(sms(
+        'TK12ABC3DJ Confirmed.You have received Ksh5,000.00 from EQUITY BANK on 21/11/26 at 9:00 AM '
+        'New M-PESA balance is Ksh9,450.00.',
+      ))!;
+      expect(p.direction, TxDirection.inbound);
+      expect(p.category, isNull);
+      expect(p.merchant, 'Equity Bank');
+    });
+
     test('parses airtime, withdrawals, M-Shwari and Fuliza repayments', () {
       expect(
         MpesaParser.parse(sms('TK1 confirmed.You bought Ksh100.00 of airtime on 21/11/26 at 8:00 AM.New M-PESA balance is Ksh900.00.'))!
@@ -122,6 +132,28 @@ void main() {
 
     test('leaves unknown recipients for the AI', () {
       expect(cat('John Kamau', TxChannel.send), isNull);
+    });
+
+    TxCategory? received(String m) =>
+        KeywordCategorizer.categorize(merchant: m, channel: TxChannel.received, direction: TxDirection.inbound);
+
+    test('money from a bank is a bank withdrawal, not income', () {
+      expect(received('Equity Bank'), TxCategory.bankWithdrawal);
+      expect(received('KCB Bank Kenya'), TxCategory.bankWithdrawal);
+      expect(received('Co-operative Bank'), TxCategory.bankWithdrawal);
+      expect(received('NCBA'), TxCategory.bankWithdrawal);
+      expect(received('I&M Bank'), TxCategory.bankWithdrawal);
+    });
+
+    test('loans and savings coming in keep their own categories', () {
+      expect(received('KCB M-PESA'), TxCategory.debt);
+      expect(received('Tala'), TxCategory.debt);
+      expect(received('M-Shwari'), TxCategory.savings);
+    });
+
+    test('ambiguous senders go to the AI', () {
+      expect(received('Equity Bulk Account'), isNull, reason: 'salaries come through bulk accounts too');
+      expect(received('Acme Supplies Ltd'), isNull);
     });
   });
 

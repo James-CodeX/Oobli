@@ -91,4 +91,28 @@ void main() {
     expect(current()['b']!.confirmed, isFalse);
     expect(ruleRepo.saved, isEmpty);
   });
+
+  test('remember on money received learns bank withdrawals only for money in', () async {
+    await setUpWith([
+      tx('a', 'Equity Bank', dir: TxDirection.inbound),
+      tx('b', 'Equity Bank', dir: TxDirection.inbound),
+      tx('c', 'Equity Bank'),
+    ]);
+    final count = await container
+        .read(transactionsProvider.notifier)
+        .quickCategorize(current()['a']!, TxCategory.bankWithdrawal, remember: true);
+    expect(count, 2);
+    expect(current()['b']!.category, TxCategory.bankWithdrawal);
+    expect(current()['c']!.confirmed, isFalse, reason: 'paying the bank is not touched');
+    expect(ruleRepo.saved, {'Equity Bank': TxCategory.bankWithdrawal});
+  });
+
+  test('remember on money received does not learn shared categories', () async {
+    await setUpWith([tx('a', 'John', dir: TxDirection.inbound), tx('b', 'John', dir: TxDirection.inbound)]);
+    final count = await container
+        .read(transactionsProvider.notifier)
+        .quickCategorize(current()['a']!, TxCategory.transfer, remember: true);
+    expect(count, 1);
+    expect(ruleRepo.saved, isEmpty, reason: "a 'transfer' rule would also relabel paying John");
+  });
 }

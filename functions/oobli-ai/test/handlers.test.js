@@ -73,3 +73,23 @@ test('main rejects anonymous executions', async () => {
   await main({ req: { method: 'POST', path: '/chat', headers: {}, bodyJson: {} }, res, log() {}, error() {} });
   assert.equal(sent.status, 401);
 });
+
+test('categorize keeps categories consistent with direction', async () => {
+  const { impl } = fakeFetch([{
+    status: 200,
+    body: interaction('{"results":[' +
+      '{"id":"1","category":"bank_withdrawal","merchant":"Equity Bank","confidence":0.9},' +
+      '{"id":"2","category":"groceries","merchant":"Acme","confidence":0.9},' +
+      '{"id":"3","category":"income","merchant":"Naivas","confidence":0.9}]}'),
+  }]);
+  const gemini = createGemini({ apiKey: 'k', models: ['a'], fetchImpl: impl });
+  const out = await categorize(gemini, {
+    items: [
+      { id: '1', merchant: 'EQUITY BANK', channel: 'received', direction: 'in', amount: 5000 },
+      { id: '2', merchant: 'ACME', channel: 'received', direction: 'in', amount: 900 },
+      { id: '3', merchant: 'NAIVAS', channel: 'till', direction: 'out', amount: 300 },
+    ],
+  });
+  const byId = Object.fromEntries(out.results.map((r) => [r.id, r.category]));
+  assert.deepEqual(byId, { 1: 'bank_withdrawal', 2: 'income', 3: 'other' });
+});

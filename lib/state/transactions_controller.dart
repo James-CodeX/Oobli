@@ -95,7 +95,9 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
       await ref.read(localStoreProvider).incrementAiCorrections();
     }
     _set([for (final t in _current) t.id == updated.id ? updated : t]);
-    if (applyToMerchant) await recategorizeMerchant(after.merchant, after.category);
+    if (applyToMerchant && canLearn(after, after.category)) {
+      await recategorizeMerchant(after.merchant, after.category, direction: after.direction);
+    }
   }
 
   /// "Yes" on an AI suggestion: keep the category and remember it.
@@ -109,17 +111,20 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
   /// shown at once and written in the background; if the write fails the
   /// change is rolled back and the error rethrown.
   ///
-  /// With [remember] (spending only) the rule is learned and every other
-  /// unconfirmed spend from the same merchant is filed the same way.
-  /// Returns how many transactions were updated.
+  /// With [remember] the rule is learned and every other unconfirmed
+  /// transaction from the same merchant, in the same direction, is filed the
+  /// same way. Returns how many transactions were updated.
   Future<int> quickCategorize(Transaction tx, TxCategory category, {bool remember = false}) async {
-    final learn = remember && tx.isOutgoing;
+    final learn = remember && canLearn(tx, category);
     final key = Transaction.merchantKey(tx.merchant);
     final targets = [
       tx,
       if (learn)
         ..._current.where((t) =>
-            t.id != tx.id && !t.confirmed && t.isOutgoing && Transaction.merchantKey(t.merchant) == key),
+            t.id != tx.id &&
+            !t.confirmed &&
+            t.direction == tx.direction &&
+            Transaction.merchantKey(t.merchant) == key),
     ];
     final before = {for (final t in targets) t.id: t};
     _set([
@@ -151,16 +156,26 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
     }
   }
 
+  /// Merchant rules are shared by both directions, so money received only
+  /// teaches categories that can never apply to spending (Income, Bank
+  /// withdrawal). Otherwise receiving from John would relabel paying John.
+  static bool canLearn(Transaction tx, TxCategory category) => tx.isOutgoing || category.receivingOnly;
+
   Future<void> delete(Transaction tx) async {
     await _repo.delete(tx.id);
     _set(_current.where((t) => t.id != tx.id).toList());
   }
 
   /// Moves every transaction from [merchant] into [category] and learns the rule.
-  Future<int> recategorizeMerchant(String merchant, TxCategory category) async {
+  /// Only transactions the category fits are touched (money in stays money in).
+  Future<int> recategorizeMerchant(String merchant, TxCategory category, {TxDirection? direction}) async {
     final key = Transaction.merchantKey(merchant);
     final targets = _current
-        .where((t) => Transaction.merchantKey(t.merchant) == key && t.category != category)
+        .where((t) =>
+            Transaction.merchantKey(t.merchant) == key &&
+            t.category != category &&
+            (direction == null || t.direction == direction) &&
+            category.fits(inbound: !t.isOutgoing))
         .toList();
     for (var i = 0; i < targets.length; i += 6) {
       await Future.wait(targets

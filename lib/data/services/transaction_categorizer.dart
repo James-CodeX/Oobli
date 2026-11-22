@@ -41,7 +41,12 @@ class TransactionCategorizer {
 
     for (var i = 0; i < items.length; i++) {
       final p = items[i];
-      final ruled = rules[Transaction.merchantKey(p.merchant)];
+      final inbound = p.direction == TxDirection.inbound;
+      // A rule learned for money in never relabels money out, and vice versa.
+      final ruled = switch (rules[Transaction.merchantKey(p.merchant)]) {
+        final c? when c.fits(inbound: inbound) => c,
+        _ => null,
+      };
       final known = ruled ?? p.category ??
           KeywordCategorizer.categorize(merchant: p.merchant, channel: p.channel, direction: p.direction);
       if (known != null) {
@@ -70,7 +75,8 @@ class TransactionCategorizer {
       }
       for (final i in pending) {
         final guess = ai['$i'];
-        results[i] = guess == null
+        final fits = guess != null && guess.category.fits(inbound: items[i].isIncoming);
+        results[i] = !fits
             ? _toTransaction(items[i], _fallback(items[i]))
             : _toTransaction(
                 items[i],
@@ -84,6 +90,7 @@ class TransactionCategorizer {
   }
 
   static TxCategory _fallback(ParsedTransaction p) => switch (p.channel) {
+        _ when p.direction == TxDirection.inbound => TxCategory.income,
         TxChannel.send || TxChannel.pochi => TxCategory.transfer,
         _ => TxCategory.other,
       };

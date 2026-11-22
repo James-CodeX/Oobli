@@ -3,6 +3,7 @@ import {
   CHANNELS,
   categoryGuide,
   normaliseCategory,
+  categoryForDirection,
 } from './categories.js';
 
 export class BadRequest extends Error {
@@ -63,7 +64,10 @@ Category keys:
 ${categoryGuide()}
 
 Rules:
-- Incoming money (direction "in") is "income" unless it is clearly a loan disbursement ("debt") or a savings withdrawal ("savings").
+- Incoming money (direction "in") can only be: "income", "bank_withdrawal", "debt" (loan disbursement), "savings" (savings withdrawal), "transfer" or "other".
+- Incoming money from a bank (bank name, "Bank", Pesalink) is "bank_withdrawal": the user moved their own money, it is NOT income.
+- Bank "bulk"/B2C accounts are ambiguous: employers pay salaries through them. A large, round, month-start amount is likely "income"; otherwise "bank_withdrawal". Use confidence < 0.6 when unsure.
+- "income" and "bank_withdrawal" are never valid for outgoing money (direction "out").
 - Pochi la Biashara and tills to small traders selling food produce are usually "groceries".
 - "send" to a person's name with no other signal is "transfer".
 - Also return a clean, human-friendly merchant name (Title Case, no phone numbers or account numbers).
@@ -105,7 +109,7 @@ ${compact(items)}`;
       .filter((r) => ids.has(r.id))
       .map((r) => ({
         id: r.id,
-        category: normaliseCategory(r.category),
+        category: categoryForDirection(r.category, items.find((i) => i.id === r.id)?.direction),
         merchant: clip(r.merchant, 160) || items.find((i) => i.id === r.id)?.merchant,
         confidence: Math.max(0, Math.min(1, num(r.confidence, 0.5))),
       })),
@@ -182,7 +186,7 @@ ${compact(messages)}`;
         reference: clip(t.reference, 40),
         balance: num(t.balance, -1),
         occurredAt: clip(t.occurredAt, 40),
-        category: normaliseCategory(t.category),
+        category: categoryForDirection(t.category, t.direction === 'in' ? 'in' : 'out'),
       })),
   };
 }

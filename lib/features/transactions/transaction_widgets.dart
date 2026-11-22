@@ -209,9 +209,8 @@ class ToneDot extends StatelessWidget {
 }
 
 /// Categories offered for a transaction going in [direction].
-List<TxCategory> categoryChoices(TxDirection direction) => direction == TxDirection.inbound
-    ? const [TxCategory.income, TxCategory.savings, TxCategory.debt, TxCategory.transfer, TxCategory.other]
-    : TxCategory.spending;
+List<TxCategory> categoryChoices(TxDirection direction) =>
+    direction == TxDirection.inbound ? TxCategory.receiving : TxCategory.spending;
 
 /// Pill with a category icon and label, tinted by the category tone when selected.
 class CategoryChip extends StatelessWidget {

@@ -224,7 +224,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
             ),
             const SizedBox(height: Sp.md),
             OobliTextField(hint: 'Note (optional)', icon: Icons.notes_rounded, controller: _note, fillColor: c.surface),
-            if (_direction == TxDirection.out) ...[
+            if (_direction == TxDirection.out || _category.receivingOnly) ...[
               const SizedBox(height: Sp.sm),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
