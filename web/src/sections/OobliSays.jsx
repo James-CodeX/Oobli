@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Cat } from '../components/Cat.jsx';
 import { useInView } from '../components/Reveal.jsx';
 import { INSIGHTS } from '../data.js';
 
@@ -14,7 +15,7 @@ export function OobliSays() {
 
   return (
     <button type="button" ref={ref} className="says" onClick={() => setI((i + 1) % INSIGHTS.length)} aria-label="Next Oobli tip">
-      <img src="/logo.webp" alt="" width="132" height="132" className="says-cat" />
+      <Cat className="says-cat" title="" width="150" height="163" />
       <div className="says-bubble">
         <small>Oobli says…</small>
         <p key={i} className="pop-in">{INSIGHTS[i]}</p>

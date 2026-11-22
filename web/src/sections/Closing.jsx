@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DOWNLOAD_URL } from '../config.js';
 import { Coin, Sparkle } from '../components/Art.jsx';
+import { Cat } from '../components/Cat.jsx';
 import { Button } from '../components/Button.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 
@@ -69,7 +70,7 @@ export function FinalCta() {
         <Coin className="float delay-2 f3" size={46} />
         <Coin className="float f4" size={34} />
         <Sparkle className="twinkle f5" size={24} />
-        <img src="/logo.webp" alt="" className="final-cat float" width="150" height="150" />
+        <Cat className="final-cat" title="" width="170" height="185" />
       </div>
       <svg className="final-wave" viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true">
         <path d="M0 80c240-70 480-70 720 0s480 70 720 0v80H0z" fill="#58CC02" />
