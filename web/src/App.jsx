@@ -18,13 +18,13 @@ export function App() {
       <main>
         <Hero />
         <CategoryStrip />
-        <Feature id="how" title="reads your m-pesa for you" art={<SmsPhone />}>
+        <Feature id="how" title="reads your M-Pesa for you" art={<SmsPhone />}>
           <p>Every M-Pesa and bank confirmation turns into a clean, sorted transaction: Tills, Paybills, Pochi la Biashara, Send Money and bank transfers. No typing, no spreadsheets.</p>
         </Feature>
         <Feature id="sort" title="sort anything in one tap" art={<QuickSortDemo />} flip>
           <p>When Oobli isn't sure, Quick sort shows you the transaction and every category. One tap files it and jumps to the next, and Oobli remembers that merchant from then on. <b>Try it →</b></p>
         </Feature>
-        <Feature title="oobli says…" art={<OobliSays />}>
+        <Feature title="Oobli says…" art={<OobliSays />}>
           <p>Friendly nudges that catch subscriptions, spending spikes and Pochi patterns before they cost you, written by AI from your own numbers.</p>
         </Feature>
         <Feature id="plans" title="plans that fit your pay" art={<PlanSlider />} flip tint="blue">

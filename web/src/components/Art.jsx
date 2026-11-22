@@ -38,7 +38,7 @@ export function Coin({ size = 44, className = '', style }) {
       <ellipse cx="24" cy="27" rx="20" ry="18" fill="#E5A800" />
       <ellipse cx="24" cy="23" rx="20" ry="18" fill="#FFC800" />
       <ellipse cx="24" cy="23" rx="14" ry="12.5" fill="#FFD84D" />
-      <text x="24" y="28" textAnchor="middle" fontFamily="Nunito, sans-serif" fontWeight="900" fontSize="13" fill="#B88600">KES</text>
+      <text x="24" y="28" textAnchor="middle" fontFamily="Poppins, sans-serif" fontWeight="800" fontSize="13" fill="#B88600">KES</text>
     </svg>
   );
 }
@@ -65,7 +65,7 @@ export function Logo({ size = 40 }) {
   return (
     <a className="logo" href="/" aria-label="Oobli home">
       <img src="/logo.webp" width={size} height={size} alt="" />
-      <span>oobli</span>
+      <span>Oobli</span>
     </a>
   );
 }

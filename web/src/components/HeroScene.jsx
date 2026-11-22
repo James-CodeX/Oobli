@@ -57,7 +57,7 @@ function Coin({ r = 14 }) {
       <circle r={r} cy={2} fill="#E5A800" />
       <circle r={r} fill="#FFC800" />
       <circle r={r * 0.66} fill="#FFD84D" />
-      <text y={r * 0.3} textAnchor="middle" fontFamily="Nunito, sans-serif" fontWeight="900" fontSize={r * 0.62} fill="#B88600">KSh</text>
+      <text y={r * 0.3} textAnchor="middle" fontFamily="Poppins, sans-serif" fontWeight="800" fontSize={r * 0.62} fill="#B88600">KSh</text>
     </g>
   );
 }
@@ -146,8 +146,8 @@ export function HeroScene() {
                 <rect width="200" height="324" rx="36" fill="#131F24" />
                 <rect x="12" y="14" width="176" height="296" rx="26" fill="#fff" />
                 <rect x="78" y="22" width="44" height="10" rx="5" fill="#131F24" />
-                <text x="30" y="62" fontFamily="Nunito, sans-serif" fontWeight="800" fontSize="12" fill="#777">Today's Flow</text>
-                <text x="30" y="86" fontFamily="Nunito, sans-serif" fontWeight="900" fontSize="20" fill="#4B4B4B">KES 2,450</text>
+                <text x="30" y="62" fontFamily="Poppins, sans-serif" fontWeight="800" fontSize="12" fill="#777">Today's Flow</text>
+                <text x="30" y="86" fontFamily="Poppins, sans-serif" fontWeight="800" fontSize="20" fill="#4B4B4B">KES 2,450</text>
                 {BARS.map((b, i) => (
                   <g key={b.x}>
                     <rect x={b.x} y={110} width="18" height="84" rx="9" fill="#F0F0F0" />

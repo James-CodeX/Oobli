@@ -42,7 +42,7 @@ export function Cat({ className = '', title = 'Oobli the cat', coin = true, ...s
               <circle cx="212" cy="74" r="18" fill="#E5A800" />
               <circle cx="212" cy="71" r="18" fill="#FFC800" />
               <circle cx="212" cy="71" r="12" fill="#FFD84D" />
-              <text x="212" y="76" textAnchor="middle" fontFamily="Nunito, sans-serif" fontWeight="900" fontSize="12" fill="#B88600">
+              <text x="212" y="76" textAnchor="middle" fontFamily="Poppins, sans-serif" fontWeight="800" fontSize="12" fill="#B88600">
                 KSh
               </text>
             </g>

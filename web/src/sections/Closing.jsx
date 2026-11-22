@@ -61,7 +61,7 @@ export function FinalCta() {
   return (
     <section className="final">
       <Reveal className="container final-copy">
-        <h2>take charge of your money with oobli</h2>
+        <h2>take charge of your money with Oobli</h2>
         <Button size="lg" href={DOWNLOAD_URL}>Get started</Button>
       </Reveal>
       <div className="final-scene" aria-hidden="true">
