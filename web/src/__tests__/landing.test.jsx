@@ -10,7 +10,7 @@ describe('landing page', () => {
   it('renders every section and links to the legal pages', () => {
     render(<App />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/M-Pesa money/);
-    for (const title of ['reads your m-pesa for you', 'sort anything in one tap', 'plans that fit your pay', 'OOBLI WRAPPED', 'private by design']) {
+    for (const title of ['reads your M-Pesa for you', 'sort anything in one tap', 'plans that fit your pay', 'OOBLI WRAPPED', 'private by design']) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     }
     const footer = screen.getByRole('contentinfo');
