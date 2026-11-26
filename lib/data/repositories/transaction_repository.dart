@@ -49,13 +49,13 @@ class TransactionRepository {
 
   Future<Transaction> create(String userId, Transaction tx) async {
     try {
-      final row = await _db.createRow(
+      final row = await withDeadline(() => _db.createRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.transactionsTable,
         rowId: ID.unique(),
         data: tx.toRow(userId),
         permissions: ownerPermissions(userId),
-      );
+      ));
       return Transaction.fromRow(row.$id, row.data);
     } catch (e) {
       throw AppFailure.from(e);
@@ -83,12 +83,12 @@ class TransactionRepository {
 
   Future<Transaction> update(String userId, Transaction tx) async {
     try {
-      final row = await _db.updateRow(
+      final row = await withDeadline(() => _db.updateRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.transactionsTable,
         rowId: tx.id,
         data: tx.toRow(userId),
-      );
+      ));
       return Transaction.fromRow(row.$id, row.data);
     } catch (e) {
       throw AppFailure.from(e);
@@ -97,12 +97,12 @@ class TransactionRepository {
 
   Future<void> updateCategory(String txId, TxCategory category, {required bool confirmed}) async {
     try {
-      await _db.updateRow(
+      await withDeadline(() => _db.updateRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.transactionsTable,
         rowId: txId,
         data: {'category': category.key, 'confirmed': confirmed},
-      );
+      ));
     } catch (e) {
       throw AppFailure.from(e);
     }
@@ -110,11 +110,11 @@ class TransactionRepository {
 
   Future<void> delete(String txId) async {
     try {
-      await _db.deleteRow(
+      await withDeadline(() => _db.deleteRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.transactionsTable,
         rowId: txId,
-      );
+      ));
     } catch (e) {
       throw AppFailure.from(e);
     }

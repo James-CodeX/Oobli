@@ -17,15 +17,27 @@ bool isTransientNetworkError(Object error) {
   return false;
 }
 
-/// Runs [action], retrying transient network failures with short backoff.
+/// How long one request may take before it counts as failed. Without a
+/// limit, a mobile network that accepts the connection but never answers
+/// leaves screens loading forever.
+const requestTimeout = Duration(seconds: 15);
+
+/// Runs [action] once, failing with a [TimeoutException] after [timeout].
+/// For writes that must not be repeated blindly.
+Future<T> withDeadline<T>(Future<T> Function() action, {Duration timeout = requestTimeout}) =>
+    action().timeout(timeout, onTimeout: () => throw TimeoutException('The request timed out', timeout));
+
+/// Runs [action], retrying transient network failures (including timeouts)
+/// with short backoff. Each attempt is limited to [timeout].
 Future<T> withNetworkRetry<T>(
   Future<T> Function() action, {
   int retries = 2,
   Duration baseDelay = const Duration(milliseconds: 600),
+  Duration timeout = requestTimeout,
 }) async {
   for (var attempt = 0;; attempt++) {
     try {
-      return await action();
+      return await withDeadline(action, timeout: timeout);
     } catch (e) {
       if (attempt >= retries || !isTransientNetworkError(e)) rethrow;
       await Future<void>.delayed(baseDelay * (attempt + 1));

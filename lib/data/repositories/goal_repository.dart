@@ -31,13 +31,13 @@ class GoalRepository {
 
   Future<Goal> create(String userId, Goal goal) async {
     try {
-      final row = await _db.createRow(
+      final row = await withDeadline(() => _db.createRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.goalsTable,
         rowId: ID.unique(),
         data: goal.toRow(userId),
         permissions: ownerPermissions(userId),
-      );
+      ));
       return Goal.fromRow(row.$id, row.$createdAt, row.data);
     } catch (e) {
       throw AppFailure.from(e);
@@ -46,12 +46,12 @@ class GoalRepository {
 
   Future<Goal> update(String userId, Goal goal) async {
     try {
-      final row = await _db.updateRow(
+      final row = await withDeadline(() => _db.updateRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.goalsTable,
         rowId: goal.id,
         data: goal.toRow(userId),
-      );
+      ));
       return Goal.fromRow(row.$id, row.$createdAt, row.data);
     } catch (e) {
       throw AppFailure.from(e);
@@ -60,11 +60,11 @@ class GoalRepository {
 
   Future<void> delete(String goalId) async {
     try {
-      await _db.deleteRow(
+      await withDeadline(() => _db.deleteRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.goalsTable,
         rowId: goalId,
-      );
+      ));
     } catch (e) {
       throw AppFailure.from(e);
     }

@@ -70,7 +70,7 @@ class ResilientHttpOverrides extends HttpOverrides {
   static Future<List<InternetAddress>> orderedAddresses(String host) async {
     final literal = InternetAddress.tryParse(host);
     if (literal != null) return [literal];
-    final all = await InternetAddress.lookup(host);
+    final all = await InternetAddress.lookup(host).timeout(const Duration(seconds: 10));
     return [
       ...all.where((a) => a.type == InternetAddressType.IPv4),
       ...all.where((a) => a.type != InternetAddressType.IPv4),

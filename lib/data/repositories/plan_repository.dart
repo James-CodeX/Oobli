@@ -37,13 +37,13 @@ class PlanRepository {
 
   Future<Plan> save(String userId, Plan plan) async {
     try {
-      final row = await _db.upsertRow(
+      final row = await withDeadline(() => _db.upsertRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.plansTable,
         rowId: idFor(userId, plan.month),
         data: plan.toRow(userId),
         permissions: ownerPermissions(userId),
-      );
+      ));
       return Plan.fromRow(row.$id, row.data);
     } catch (e) {
       throw AppFailure.from(e);

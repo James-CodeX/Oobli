@@ -34,7 +34,7 @@ class AuthRepository {
     } on AppwriteException catch (e) {
       // A stale session blocks new logins; clear it and retry once.
       if (e.type == 'user_session_already_exists') {
-        await _account.deleteSession(sessionId: 'current');
+        await withDeadline(() => _account.deleteSession(sessionId: 'current'));
         return login(email: email, password: password);
       }
       throw AppFailure.from(e);
@@ -72,7 +72,7 @@ class AuthRepository {
 
   Future<void> logout() async {
     try {
-      await _account.deleteSession(sessionId: 'current');
+      await withDeadline(() => _account.deleteSession(sessionId: 'current'));
     } on AppwriteException catch (e) {
       if (e.code != 401) throw AppFailure.from(e);
     }
@@ -80,7 +80,7 @@ class AuthRepository {
 
   Future<UserProfile> savePrefs(UserProfile profile) async {
     try {
-      final user = await _account.updatePrefs(prefs: profile.toPrefs());
+      final user = await withDeadline(() => _account.updatePrefs(prefs: profile.toPrefs()));
       return _toProfile(user);
     } catch (e) {
       throw AppFailure.from(e);
@@ -89,7 +89,7 @@ class AuthRepository {
 
   Future<UserProfile> updateName(String name) async {
     try {
-      return _toProfile(await _account.updateName(name: name.trim()));
+      return _toProfile(await withDeadline(() => _account.updateName(name: name.trim())));
     } catch (e) {
       throw AppFailure.from(e);
     }

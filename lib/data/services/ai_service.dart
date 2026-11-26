@@ -44,7 +44,12 @@ class AiService {
         method: enums.ExecutionMethod.pOST,
         headers: {'content-type': 'application/json'},
         body: jsonEncode(body),
-      ));
+      ),
+        // The function may run for up to 30 s, and a timed-out call may still
+        // be running, so it is retried only once.
+        timeout: const Duration(seconds: 40),
+        retries: 1,
+      );
       final decoded = execution.responseBody.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(execution.responseBody) as Map<String, dynamic>;

@@ -40,13 +40,13 @@ class MerchantRuleRepository {
     final key = Transaction.merchantKey(merchant);
     if (key.isEmpty) return;
     try {
-      await _db.upsertRow(
+      await withDeadline(() => _db.upsertRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.merchantRulesTable,
         rowId: deterministicId('r', [userId, key]),
         data: {'userId': userId, 'merchantKey': key, 'category': category.key},
         permissions: ownerPermissions(userId),
-      );
+      ));
     } catch (e) {
       throw AppFailure.from(e);
     }
@@ -54,11 +54,11 @@ class MerchantRuleRepository {
 
   Future<void> delete(String userId, String merchantKey) async {
     try {
-      await _db.deleteRow(
+      await withDeadline(() => _db.deleteRow(
         databaseId: AppConfig.databaseId,
         tableId: AppConfig.merchantRulesTable,
         rowId: deterministicId('r', [userId, merchantKey]),
-      );
+      ));
     } catch (e) {
       throw AppFailure.from(e);
     }
