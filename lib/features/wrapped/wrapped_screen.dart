@@ -49,7 +49,7 @@ class WrappedScreen extends ConsumerWidget {
                 ? EmptyState(
                     title: 'Your story is still being written',
                     message: 'Once Oobli sees some spending this month, your Wrapped appears here.',
-                    mood: MascotMood.happy,
+                    mood: MascotMood.sleeping,
                     action: OobliButton(
                       label: 'Go to Oobli Says',
                       size: OobliButtonSize.medium,
@@ -120,7 +120,7 @@ class _Header extends StatelessWidget {
             height: 96,
             alignment: Alignment.center,
             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.18), shape: BoxShape.circle),
-            child: const OobliMascot(size: 58, glow: false, mood: MascotMood.joy),
+            child: const OobliMascot(size: 64, glow: false, mood: MascotMood.party),
           ),
           const SizedBox(height: Sp.lg),
           Text(

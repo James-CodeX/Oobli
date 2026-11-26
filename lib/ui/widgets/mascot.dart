@@ -1,47 +1,110 @@
 import 'dart:math' as math;
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/tokens.dart';
 
-enum MascotMood { happy, thinking, joy }
+/// Oobli's poses (stickers in `assets/mascot/`). Pick the one that fits the
+/// moment:
+/// * [sleeping]: welcome, idle, offline.
+/// * [winking]: hello, tips, "got it".
+/// * [thinking]: Oobli is working something out.
+/// * [working]: the AI assistant and AI-drafted plans.
+/// * [love]: goals and things you care about.
+/// * [celebrating] / [party]: milestones, goals reached, all sorted.
+/// * [cool]: streaks and good habits.
+/// * [crying]: overspending and things that went wrong.
+/// * [cozy]: calm moments (sign in, settings).
+/// * [peeking]: empty lists, "nothing here yet".
+/// * [relaxed]: nothing left to do.
+enum MascotMood {
+  sleeping('sleeping'),
+  winking('winking'),
+  thinking('thinking'),
+  working('working-at-laptop'),
+  love('hugging-heart'),
+  celebrating('celebrating'),
+  party('party'),
+  cool('cool'),
+  crying('crying'),
+  cozy('holding-mug'),
+  peeking('peeking'),
+  relaxed('belly-up');
 
-/// Oobli, the gradient blob mascot. It floats gently and blinks; the [joy]
-/// mood shows happy "^ ^" eyes for celebrations.
+  const MascotMood(this.file);
+
+  final String file;
+
+  String get asset => 'assets/mascot/$file.webp';
+}
+
+/// Oobli the cat. Floats gently; when [interactive], a tap makes it hop.
 class OobliMascot extends StatefulWidget {
   const OobliMascot({
     super.key,
     this.size = 160,
-    this.mood = MascotMood.happy,
+    this.mood = MascotMood.winking,
     this.glow = true,
     this.animate = true,
+    this.interactive = false,
+    this.onTap,
+    this.bounce = 0,
   });
 
   final double size;
   final MascotMood mood;
+
+  /// A soft circle behind Oobli.
   final bool glow;
   final bool animate;
+
+  /// Hop (with a little haptic) when tapped.
+  final bool interactive;
+  final VoidCallback? onTap;
+
+  /// Change this number to make Oobli hop (e.g. when the user picks something).
+  final int bounce;
 
   @override
   State<OobliMascot> createState() => _OobliMascotState();
 }
 
-class _OobliMascotState extends State<OobliMascot> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
+class _OobliMascotState extends State<OobliMascot> with TickerProviderStateMixin {
+  late final AnimationController _float = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 4200),
+    duration: const Duration(milliseconds: 3600),
+  );
+  late final AnimationController _hop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
   );
 
   @override
   void initState() {
     super.initState();
-    if (widget.animate) _controller.repeat();
+    if (widget.animate) _float.repeat();
+  }
+
+  @override
+  void didUpdateWidget(OobliMascot old) {
+    super.didUpdateWidget(old);
+    if (old.bounce != widget.bounce) _hop.forward(from: 0);
+    if (old.animate != widget.animate) widget.animate ? _float.repeat() : _float.stop();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _float.dispose();
+    _hop.dispose();
     super.dispose();
+  }
+
+  void _tap() {
+    HapticFeedback.lightImpact();
+    _hop.forward(from: 0);
+    widget.onTap?.call();
   }
 
   @override
@@ -50,16 +113,28 @@ class _OobliMascotState extends State<OobliMascot> with SingleTickerProviderStat
     final s = widget.size;
     final box = widget.glow ? s * 1.25 : s;
 
-    return RepaintBoundary(
+    final sticker = Image.asset(
+      widget.mood.asset,
+      width: s,
+      height: s,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      gaplessPlayback: true,
+      semanticLabel: 'Oobli',
+    );
+
+    Widget body = RepaintBoundary(
       child: SizedBox.square(
         dimension: box,
         child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            final t = _controller.value;
-            final float = math.sin(t * 2 * math.pi) * s * 0.025;
-            // Blink twice per loop, each ~120ms.
-            final blink = (t > 0.46 && t < 0.49) || (t > 0.93 && t < 0.96);
+          animation: Listenable.merge([_float, _hop]),
+          builder: (context, child) {
+            final t = _float.value;
+            final float = widget.animate ? math.sin(t * 2 * math.pi) * s * 0.02 : 0.0;
+            // Hop: up and back down, squashing a little on landing.
+            final h = _hop.value;
+            final lift = math.sin(h * math.pi) * s * 0.12;
+            final squash = h > 0.75 ? 1 - math.sin((h - 0.75) / 0.25 * math.pi) * 0.05 : 1.0;
             return Stack(
               alignment: Alignment.center,
               children: [
@@ -67,92 +142,34 @@ class _OobliMascotState extends State<OobliMascot> with SingleTickerProviderStat
                   Container(
                     width: box,
                     height: box,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: c.primary.withValues(alpha: 0.08),
-                    ),
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: c.primary.withValues(alpha: 0.08)),
                   ),
                 Transform.translate(
-                  offset: Offset(0, float),
-                  child: Container(
-                    width: s,
-                    height: s,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(s * 0.375),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [c.primary, c.accent],
-                      ),
-                    ),
-                    child: CustomPaint(
-                      painter: _EyesPainter(mood: widget.mood, blink: blink && widget.animate),
-                    ),
-                  ),
+                  offset: Offset(0, float - lift),
+                  child: Transform.scale(scaleY: squash, scaleX: 2 - squash, alignment: Alignment.bottomCenter, child: child),
                 ),
               ],
             );
           },
+          child: AnimatedSwitcher(
+            duration: Motion.medium,
+            transitionBuilder: (child, a) => FadeTransition(
+              opacity: a,
+              child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(a), child: child),
+            ),
+            child: KeyedSubtree(key: ValueKey(widget.mood), child: sticker),
+          ),
         ),
       ),
     );
+    if (widget.interactive || widget.onTap != null) {
+      body = GestureDetector(behavior: HitTestBehavior.opaque, onTap: _tap, child: body);
+    }
+    return body;
   }
 }
 
-class _EyesPainter extends CustomPainter {
-  _EyesPainter({required this.mood, required this.blink});
-
-  final MascotMood mood;
-  final bool blink;
-
-  static const _eye = Color(0xFF131F24);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final eyeW = w * 0.1;
-    final eyeH = w * 0.15;
-    final gap = w * 0.15;
-    final cy = size.height * (mood == MascotMood.thinking ? 0.44 : 0.5);
-    final shift = mood == MascotMood.thinking ? w * 0.04 : 0.0;
-    final centers = [
-      Offset(w / 2 - gap / 2 - eyeW / 2 + shift, cy),
-      Offset(w / 2 + gap / 2 + eyeW / 2 + shift, cy),
-    ];
-
-    if (mood == MascotMood.joy) {
-      final paint = Paint()
-        ..color = _eye
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = eyeW * 0.6
-        ..strokeCap = StrokeCap.round;
-      for (final c in centers) {
-        final rect = Rect.fromCenter(center: c.translate(0, eyeH * 0.15), width: eyeW * 1.6, height: eyeH);
-        canvas.drawArc(rect, math.pi * 1.1, math.pi * 0.8, false, paint);
-      }
-      final smile = Rect.fromCenter(center: Offset(w / 2, cy + eyeH * 0.9), width: gap * 1.2, height: eyeH * 0.8);
-      canvas.drawArc(smile, math.pi * 0.15, math.pi * 0.7, false, paint);
-      return;
-    }
-
-    final paint = Paint()..color = _eye;
-    for (final c in centers) {
-      final h = blink ? eyeH * 0.12 : eyeH;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: c, width: eyeW, height: h),
-          Radius.circular(eyeW / 2),
-        ),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_EyesPainter old) => old.mood != mood || old.blink != blink;
-}
-
-/// "[wallet] Oobli" wordmark from the onboarding header.
+/// Oobli wordmark: the peeking cat and the name.
 class OobliLogo extends StatelessWidget {
   const OobliLogo({super.key, this.size = 32});
 
@@ -160,16 +177,10 @@ class OobliLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(size / 4)),
-          child: Icon(Icons.account_balance_wallet_rounded, size: size * 0.62, color: c.onSurface),
-        ),
+        Image.asset(MascotMood.peeking.asset, height: size, filterQuality: FilterQuality.medium),
         SizedBox(width: size * 0.2),
         Text(
           'Oobli',

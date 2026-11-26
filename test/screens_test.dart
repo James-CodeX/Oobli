@@ -54,7 +54,8 @@ void main() {
   testWidgets('Meet Oobli', (tester) async {
     await render(tester, const MeetOobliScreen(), 'meet_oobli', signedIn: false);
     expect(find.text('Meet Oobli'), findsOneWidget);
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('Tap to wake him'), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
     expect(find.text('I already have an account'), findsOneWidget);
   });
 
@@ -68,8 +69,8 @@ void main() {
 
   testWidgets('SMS Sync Permissions', (tester) async {
     await render(tester, const SmsPermissionScreen(), 'sms_permissions', height: 1000);
-    expect(find.text('Grant Access'), findsOneWidget);
-    expect(find.text('Privacy First'), findsOneWidget);
+    expect(find.text('Allow SMS access'), findsOneWidget);
+    expect(find.text('Your chats stay private'), findsOneWidget);
   });
 
   testWidgets('Gamified Setup', (tester) async {
@@ -79,7 +80,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Continue'));
     await settle(tester);
-    expect(find.text('Anticipated Income'), findsOneWidget);
+    expect(find.text('Expected this month'), findsOneWidget);
   });
 
   testWidgets('Oobli Says dashboard', (tester) async {

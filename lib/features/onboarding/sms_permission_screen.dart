@@ -12,7 +12,6 @@ import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/mascot.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/progress.dart';
-import '../../ui/widgets/tiles.dart';
 
 class SmsPermissionScreen extends ConsumerStatefulWidget {
   const SmsPermissionScreen({super.key});
@@ -82,57 +81,38 @@ class _SmsPermissionScreenState extends ConsumerState<SmsPermissionScreen> {
                           onPressed: () => context.go(Routes.setup),
                         ),
                         const SizedBox(width: Sp.md),
-                        const Expanded(child: OobliProgressBar(value: 0.92)),
+                        const Expanded(child: SegmentedProgress(total: 4, current: 1)),
+                        const SizedBox(width: 40),
                       ],
                     ),
                     const Spacer(),
-                    const Center(child: OobliMascot(size: 96, glow: false)),
+                    const Center(child: OobliMascot(size: 170, mood: MascotMood.peeking, interactive: true)),
                     const SizedBox(height: Sp.lg),
-                    OobliSaysCard(
-                      centered: true,
-                      message: 'I need to see your messages to magically organize your M-Pesa & Bank spending!',
-                      messageStyle: t.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                    Text(
+                      'Let me read your M-Pesa',
+                      textAlign: TextAlign.center,
+                      style: t.headlineMedium.copyWith(fontWeight: FontWeight.w800),
                     ),
+                    const SizedBox(height: Sp.sm),
+                    Text(
+                      "and I'll sort every shilling for you.",
+                      textAlign: TextAlign.center,
+                      style: t.bodyLarge.copyWith(color: c.secondaryText),
+                    ),
+                    const SizedBox(height: Sp.xl),
+                    const _FeatureRow(icon: Icons.lock_rounded, text: 'Only M-Pesa and bank messages'),
+                    const _FeatureRow(icon: Icons.visibility_off_rounded, text: 'Your chats stay private'),
+                    const _FeatureRow(icon: Icons.toggle_off_rounded, text: 'Turn it off anytime'),
                     const Spacer(),
-                    const SizedBox(height: Sp.lg),
-                    OobliCard(
-                      child: Column(
-                        children: const [
-                          _FeatureRow(
-                            icon: Icons.sms_rounded,
-                            title: 'SMS Access',
-                            body: 'To read M-Pesa, Pochi, and Bank transaction alerts automatically.',
-                          ),
-                          SizedBox(height: Sp.lg),
-                          _FeatureRow(
-                            icon: Icons.auto_awesome_rounded,
-                            title: 'AI Categorization',
-                            body: 'Oobli learns your habits to group groceries, rent, and fun.',
-                          ),
-                          SizedBox(height: Sp.lg),
-                          _FeatureRow(
-                            icon: Icons.security_rounded,
-                            title: 'Privacy First',
-                            body: 'Only financial messages are processed. Personal chats stay private.',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: Sp.lg),
-                    OobliButton(label: 'Grant Access', fullWidth: true, loading: _busy, onPressed: _grant),
-                    const SizedBox(height: Sp.md),
+                    const SizedBox(height: Sp.xl),
+                    OobliButton(label: 'Allow SMS access', fullWidth: true, loading: _busy, onPressed: _grant),
+                    const SizedBox(height: Sp.sm),
                     OobliButton(
-                      label: "I'll add transactions manually",
+                      label: "I'll add transactions myself",
                       variant: OobliButtonVariant.ghost,
                       size: OobliButtonSize.medium,
                       fullWidth: true,
                       onPressed: _busy ? null : () => context.go(Routes.setup),
-                    ),
-                    const SizedBox(height: Sp.md),
-                    Text(
-                      'You can revoke this access anytime in your phone settings.',
-                      textAlign: TextAlign.center,
-                      style: t.labelSmall.copyWith(color: c.onBackground),
                     ),
                   ],
                 ),
@@ -146,37 +126,24 @@ class _SmsPermissionScreenState extends ConsumerState<SmsPermissionScreen> {
 }
 
 class _FeatureRow extends StatelessWidget {
-  const _FeatureRow({required this.icon, required this.title, required this.body});
+  const _FeatureRow({required this.icon, required this.text});
 
   final IconData icon;
-  final String title;
-  final String body;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final t = context.text;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(color: c.surfaceVariant, borderRadius: Rad.all(Rad.md)),
-          child: Icon(icon, color: c.primary),
-        ),
-        const SizedBox(width: Sp.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: t.titleMedium),
-              const SizedBox(height: Sp.xs),
-              Text(body, style: t.bodyMedium.copyWith(color: c.secondaryText)),
-            ],
-          ),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: c.primary),
+          const SizedBox(width: Sp.sm),
+          Text(text, style: context.text.bodyMedium),
+        ],
+      ),
     );
   }
 }

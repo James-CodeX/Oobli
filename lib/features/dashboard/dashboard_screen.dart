@@ -16,6 +16,7 @@ import '../../state/transactions_controller.dart';
 import '../../state/update_controller.dart';
 import '../../ui/widgets/charts.dart';
 import '../../ui/widgets/feedback.dart';
+import '../../ui/widgets/mascot.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/tiles.dart';
@@ -129,17 +130,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header({required this.name, required this.headline, required this.syncing});
 
   final String name;
   final String headline;
   final bool syncing;
 
+  /// Oobli's face says how today is going at a glance.
+  static MascotMood _mood(SpendingStats stats, bool syncing) {
+    if (syncing) return MascotMood.working;
+    return switch (stats.todayPace) {
+      DayPace.quiet => stats.now.hour < 11 ? MascotMood.sleeping : MascotMood.cool,
+      DayPace.calm => MascotMood.cool,
+      DayPace.usual => MascotMood.winking,
+      DayPace.high => MascotMood.crying,
+    };
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final t = context.text;
+    final hasData = ref.watch(transactionsProvider).value?.isNotEmpty ?? false;
+    final mood = _mood(ref.watch(statsProvider), syncing);
     return Padding(
       padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.lg, Sp.lg, Sp.sm),
       child: Column(
@@ -147,6 +161,10 @@ class _Header extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (hasData) ...[
+                OobliMascot(size: 52, glow: false, mood: mood, interactive: true),
+                const SizedBox(width: Sp.sm),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -737,6 +755,7 @@ class _EmptyFeed extends ConsumerWidget {
     return Center(
       child: EmptyState(
         title: syncing ? 'Reading your M-Pesa messages…' : 'No transactions yet',
+        mood: syncing ? MascotMood.working : MascotMood.peeking,
         message: syncing
             ? 'Oobli is organising your spending. This only takes a moment.'
             : smsEnabled

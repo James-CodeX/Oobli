@@ -103,7 +103,7 @@ class _GoalDetailsSheetState extends ConsumerState<_GoalDetailsSheet> {
                     ],
                   ),
                 ),
-                if (goal.isComplete) const OobliMascot(size: 48, glow: false, mood: MascotMood.joy),
+                if (goal.isComplete) const OobliMascot(size: 56, glow: false, mood: MascotMood.celebrating),
               ],
             ),
             const SizedBox(height: Sp.lg),

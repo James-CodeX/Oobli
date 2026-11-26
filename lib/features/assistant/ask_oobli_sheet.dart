@@ -101,7 +101,7 @@ class _AskOobliSheetState extends ConsumerState<AskOobliSheet> {
             padding: const EdgeInsets.symmetric(horizontal: Sp.lg),
             child: Row(
               children: [
-                const OobliMascot(size: 36, glow: false),
+                const OobliMascot(size: 40, glow: false, mood: MascotMood.working),
                 const SizedBox(width: Sp.md),
                 Expanded(child: Text('Ask Oobli', style: t.headlineSmall)),
                 if (chat.messages.isNotEmpty)
@@ -120,7 +120,7 @@ class _AskOobliSheetState extends ConsumerState<AskOobliSheet> {
                     padding: const EdgeInsets.all(Sp.lg),
                     children: [
                       const SizedBox(height: Sp.lg),
-                      const Center(child: OobliMascot(size: 76, mood: MascotMood.happy)),
+                      const Center(child: OobliMascot(size: 96, mood: MascotMood.working, interactive: true)),
                       const SizedBox(height: Sp.lg),
                       Text(
                         "Hi! I know your M-Pesa story. Ask me anything about your money.",

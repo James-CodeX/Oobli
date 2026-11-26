@@ -46,12 +46,22 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
   final _target = TextEditingController();
   _GoalPreset? _goal;
   bool _saving = false;
+  int _bounce = 0;
+
+  /// Oobli reacts to every choice with a little hop.
+  void _react(VoidCallback change) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      change();
+      _bounce++;
+    });
+  }
 
   static const _focusOptions = [
-    (FocusGoal.debt, 'Clear those M-Shwari & Fuliza balances', Icons.local_fire_department_rounded),
-    (FocusGoal.saving, 'Build a buffer for the rainy days', Icons.savings_rounded),
-    (FocusGoal.investing, 'Grow wealth in M-Mali or Stocks', Icons.trending_up_rounded),
-    (FocusGoal.tracking, 'I want to see where my M-Pesa goes', Icons.visibility_rounded),
+    (FocusGoal.debt, 'Clear Fuliza and M-Shwari', Icons.local_fire_department_rounded),
+    (FocusGoal.saving, 'A buffer for rainy days', Icons.savings_rounded),
+    (FocusGoal.investing, 'Grow money in M-Mali or stocks', Icons.trending_up_rounded),
+    (FocusGoal.tracking, 'See where my M-Pesa goes', Icons.visibility_rounded),
   ];
 
   static const _goalPresets = [
@@ -71,9 +81,15 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
   }
 
   String get _question => switch (_step) {
-        1 => "Let's set your focus for this month. What's the big plan?",
-        2 => 'How much money are you expecting this month?',
-        _ => "What's one thing you're saving for?",
+        1 => 'What matters most?',
+        2 => 'How much comes in this month?',
+        _ => 'Saving for something?',
+      };
+
+  MascotMood get _mood => switch (_step) {
+        1 => MascotMood.thinking,
+        2 => MascotMood.cool,
+        _ => _goal == null ? MascotMood.love : MascotMood.celebrating,
       };
 
   void _next() {
@@ -145,39 +161,21 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
                     onPressed: _back,
                   ),
                   const SizedBox(width: Sp.sm),
-                  Expanded(child: SegmentedProgress(total: 3, current: _step)),
+                  Expanded(child: SegmentedProgress(total: 4, current: _step + 1)),
                   const SizedBox(width: 40),
                 ],
               ),
               const SizedBox(height: Sp.md),
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: c.accent.withValues(alpha: 0.25)),
-                    child: OobliMascot(size: 32, glow: false, mood: _step == 3 ? MascotMood.joy : MascotMood.happy),
-                  ),
-                  const SizedBox(width: Sp.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Oobli says...', style: t.labelLarge.copyWith(fontWeight: FontWeight.w700, color: c.onBackground)),
-                        const SizedBox(height: Sp.xs),
-                        AnimatedSwitcher(
-                          duration: Motion.medium,
-                          child: Text(
-                            _question,
-                            key: ValueKey(_step),
-                            style: t.titleLarge.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Center(child: OobliMascot(size: 104, glow: false, mood: _mood, bounce: _bounce, interactive: true)),
+              const SizedBox(height: Sp.sm),
+              AnimatedSwitcher(
+                duration: Motion.medium,
+                child: Text(
+                  _question,
+                  key: ValueKey(_step),
+                  textAlign: TextAlign.center,
+                  style: t.headlineSmall.copyWith(fontWeight: FontWeight.w800),
+                ),
               ),
               const SizedBox(height: Sp.xl),
               Expanded(
@@ -194,10 +192,8 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
                 ),
               ),
               const SizedBox(height: Sp.md),
-              _hint(),
-              const SizedBox(height: Sp.md),
               OobliButton(
-                label: _step == 3 ? 'Continue to Oobli Plans' : 'Continue',
+                label: _step == 3 ? (_goal == null ? 'Finish' : "Let's go") : 'Continue',
                 fullWidth: true,
                 loading: _saving,
                 onPressed: _step == 2 && (ThousandsFormatter.parse(_income.text) ?? 0) <= 0
@@ -234,14 +230,14 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
                 subtitle: subtitle,
                 icon: icon,
                 selected: _focus == focus,
-                onTap: () => setState(() => _focus = focus),
+                onTap: () => _react(() => _focus = focus),
               );
             },
           ),
         2 => ListView(
             children: [
               OobliTextField(
-                label: 'Anticipated Income',
+                label: 'Expected this month',
                 hint: '85,000',
                 icon: Icons.payments_rounded,
                 controller: _income,
@@ -259,7 +255,7 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
                     PillChoice(
                       label: Fmt.kes(amount),
                       selected: ThousandsFormatter.parse(_income.text) == amount,
-                      onTap: () => setState(() => _income.text = Fmt.number(amount)),
+                      onTap: () => _react(() => _income.text = Fmt.number(amount)),
                     ),
                 ],
               ),
@@ -277,7 +273,7 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
                 children: [for (final g in _goalPresets) _GoalTile(
                   preset: g,
                   selected: _goal == g,
-                  onTap: () => setState(() {
+                  onTap: () => _react(() {
                     _goal = g;
                     _target.text = Fmt.number(g.target);
                   }),
@@ -302,26 +298,6 @@ class _GamifiedSetupScreenState extends ConsumerState<GamifiedSetupScreen> {
             ],
           ),
       };
-
-  Widget _hint() {
-    final c = context.colors;
-    final message = switch (_step) {
-      1 => "Most Oobli users in Nairobi start with 'Kill the Debt' to save on interest.",
-      2 => 'Oobli uses this to draft your first AI plan. You can change it anytime.',
-      _ => 'Goals with a target get milestones and a projected finish date.',
-    };
-    return Container(
-      padding: const EdgeInsets.all(Sp.lg),
-      decoration: BoxDecoration(color: c.surfaceVariant.withValues(alpha: 0.45), borderRadius: Rad.all(Rad.lg)),
-      child: Row(
-        children: [
-          Icon(Icons.auto_awesome_rounded, size: 18, color: c.onSurfaceVariant),
-          const SizedBox(width: Sp.sm),
-          Expanded(child: Text(message, style: context.text.bodySmall.copyWith(color: c.secondaryText))),
-        ],
-      ),
-    );
-  }
 }
 
 class _GoalTile extends StatelessWidget {

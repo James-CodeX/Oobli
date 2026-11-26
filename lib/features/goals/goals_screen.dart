@@ -83,7 +83,7 @@ class GoalsScreen extends ConsumerWidget {
                     child: EmptyState(
                       title: 'Dream it, then save it',
                       message: 'Create a goal and Oobli will break it into milestones and cheer you on.',
-                      mood: MascotMood.happy,
+                      mood: MascotMood.love,
                     ),
                   )
                 : _GoalsBody(goals: goals, primary: primary),
@@ -181,7 +181,7 @@ class _GoalsBody extends ConsumerWidget {
               borderColor: c.primary.withValues(alpha: 0.2),
               child: Row(
                 children: [
-                  const OobliMascot(size: 40, glow: false, mood: MascotMood.joy),
+                  const OobliMascot(size: 48, glow: false, mood: MascotMood.celebrating),
                   const SizedBox(width: Sp.md),
                   Expanded(
                     child: Text(

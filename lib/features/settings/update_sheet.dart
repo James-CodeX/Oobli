@@ -67,7 +67,7 @@ class _UpdateSheet extends ConsumerWidget {
         children: [
           Row(
             children: [
-              const OobliMascot(size: 44, glow: false, mood: MascotMood.joy),
+              const OobliMascot(size: 56, glow: false, mood: MascotMood.party),
               const SizedBox(width: Sp.md),
               Expanded(
                 child: Column(

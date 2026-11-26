@@ -9,6 +9,9 @@ import '../data/models/plan.dart';
 import '../data/models/transaction.dart';
 import 'bills.dart';
 
+/// How today's spending is going (drives Oobli's face on the home screen).
+enum DayPace { quiet, calm, usual, high }
+
 enum PeriodKind { today, yesterday, week, month, sixMonths, year }
 
 /// A span of time the charts can show: today, yesterday, the last 7 days, a
@@ -282,6 +285,28 @@ class SpendingStats {
       totals[t.occurredAt.weekday] = (totals[t.occurredAt.weekday] ?? 0) + t.amount;
     }
     return totals.map((k, v) => MapEntry(k, v / 8));
+  }
+
+  /// What a typical day like today costs: the average for this weekday over
+  /// the last 8 weeks, or the daily average of the last 4 weeks. Null with
+  /// too little history to tell.
+  double? get usualForToday {
+    final weekday = weekdayAverages()[today.weekday] ?? 0;
+    if (weekday > 0) return weekday;
+    final daily = spentBetween(today.subtract(const Duration(days: 28)), today) / 28;
+    return daily > 0 ? daily : null;
+  }
+
+  /// How today compares with [usualForToday]: "calm" (no spending yet or
+  /// well below usual), "usual", or "high" (half again over usual or more).
+  DayPace get todayPace {
+    final usual = usualForToday;
+    final spent = spentToday;
+    if (usual == null) return spent > 0 ? DayPace.usual : DayPace.quiet;
+    if (spent <= 0) return DayPace.quiet;
+    if (spent >= usual * 1.5) return DayPace.high;
+    if (spent <= usual * 0.8) return DayPace.calm;
+    return DayPace.usual;
   }
 
   int get aiCategorizedCount => all.where((t) => t.aiCategorized).length;

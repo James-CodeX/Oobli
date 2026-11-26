@@ -101,7 +101,7 @@ class _NoPlan extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: OobliMascot(size: 72, glow: false, mood: MascotMood.happy)),
+        const Center(child: OobliMascot(size: 96, glow: false, mood: MascotMood.working, interactive: true)),
         const SizedBox(height: Sp.md),
         Text('Plan your month', textAlign: TextAlign.center, style: t.titleLarge),
         const SizedBox(height: Sp.xs),
@@ -252,16 +252,38 @@ class _PlanBody extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Spent so far', style: t.labelMedium.copyWith(color: c.secondaryText)),
-              const SizedBox(height: Sp.xs),
-              Text.rich(
-                TextSpan(children: [
-                  TextSpan(text: Fmt.kes(spent), style: t.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
-                  TextSpan(
-                    text: '  of ${Fmt.kes(budget)}',
-                    style: t.bodyMedium.copyWith(color: c.secondaryText),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Spent so far', style: t.labelMedium.copyWith(color: c.secondaryText)),
+                        const SizedBox(height: Sp.xs),
+                        Text.rich(
+                          TextSpan(children: [
+                            TextSpan(text: Fmt.kes(spent), style: t.headlineMedium.copyWith(fontWeight: FontWeight.w800)),
+                            TextSpan(
+                              text: '  of ${Fmt.kes(budget)}',
+                              style: t.bodyMedium.copyWith(color: c.secondaryText),
+                            ),
+                          ]),
+                        ),
+                      ],
+                    ),
                   ),
-                ]),
+                  // Over budget: tears. Spending slower than the month: cool.
+                  OobliMascot(
+                    size: 56,
+                    glow: false,
+                    interactive: true,
+                    mood: over
+                        ? MascotMood.crying
+                        : budget > 0 && spent / budget <= now.day.clamp(1, daysInMonth) / daysInMonth
+                            ? MascotMood.cool
+                            : MascotMood.thinking,
+                  ),
+                ],
               ),
               const SizedBox(height: Sp.md),
               OobliProgressBar(value: budget <= 0 ? 0 : spent / budget, color: over ? c.error : c.primary, height: 8),

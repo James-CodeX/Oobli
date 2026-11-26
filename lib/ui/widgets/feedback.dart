@@ -88,7 +88,7 @@ class EmptyState extends StatelessWidget {
     required this.message,
     this.action,
     this.secondary,
-    this.mood = MascotMood.thinking,
+    this.mood = MascotMood.peeking,
   });
 
   final String title;
@@ -133,6 +133,7 @@ class ErrorRetry extends StatelessWidget {
     final failure = AppFailure.from(error);
     return EmptyState(
       title: 'Oops, a small hiccup',
+      mood: MascotMood.crying,
       message: failure.message,
       action: OobliButton(
         label: 'Try again',

@@ -541,7 +541,7 @@ class _Empty extends StatelessWidget {
       return EmptyState(
         title: 'This week is sorted',
         message: '$olderLeft older ${olderLeft == 1 ? 'one is' : 'ones are'} waiting, if you want to look.',
-        mood: MascotMood.joy,
+        mood: MascotMood.celebrating,
         action: OobliButton(label: 'Done', onPressed: onDone),
         secondary: OobliButton(label: 'See older', variant: OobliButtonVariant.secondary, onPressed: onOlder),
       );
@@ -549,7 +549,7 @@ class _Empty extends StatelessWidget {
     return EmptyState(
       title: 'Nothing to sort',
       message: 'Oobli files what it is sure about. New M-Pesa messages land here only when Oobli needs you.',
-      mood: MascotMood.joy,
+      mood: MascotMood.relaxed,
       action: OobliButton(label: 'Done', onPressed: onDone),
     );
   }
@@ -770,7 +770,7 @@ class _AllSorted extends StatelessWidget {
         padding: const EdgeInsets.all(Sp.md),
         child: Row(
           children: [
-            const OobliMascot(size: 48, mood: MascotMood.joy),
+            const OobliMascot(size: 52, glow: false, mood: MascotMood.party),
             const SizedBox(width: Sp.md),
             Expanded(
               child: Column(
