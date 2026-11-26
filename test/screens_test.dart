@@ -16,6 +16,7 @@ import 'package:oobli/features/onboarding/sms_permission_screen.dart';
 import 'package:oobli/features/onboarding/splash_screen.dart';
 import 'package:oobli/features/plans/plans_screen.dart';
 import 'package:oobli/features/settings/settings_screen.dart';
+import 'package:oobli/domain/sorting.dart';
 import 'package:oobli/features/transactions/quick_sort_screen.dart';
 import 'package:oobli/features/wrapped/wrapped_screen.dart';
 
@@ -153,22 +154,43 @@ void main() {
   });
 
   testWidgets('Quick sort: one tap files a transaction and opens the next', (tester) async {
-    final total = fixtureTransactions().length;
+    final recent = SortQueue.recent(fixtureTransactions(), DateTime.now()).length;
+    final older = SortQueue.older(fixtureTransactions(), DateTime.now()).length;
     await render(tester, const QuickSortScreen(), 'quick_sort');
     expect(find.text('Quick sort'), findsOneWidget);
     expect(find.text('Remember for this merchant'), findsOneWidget);
-    expect(find.text('$total left'), findsOneWidget);
+    // Only the last 7 days by default; older ones are one tap away.
+    expect(find.text('This week · $recent'), findsOneWidget);
+    expect(find.text('Older · $older'), findsOneWidget);
+    expect(find.text('$recent left'), findsOneWidget);
     // The newest transaction is open with every spending category.
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('Fees & Charges'), findsOneWidget);
 
     await tester.tap(find.text('Fees & Charges'));
     await settle(tester);
-    expect(find.text('${total - 1} left'), findsOneWidget);
+    expect(find.text('${recent - 1} left'), findsOneWidget);
     // Naivas is filed and scrolled away; Mama Mboga Pochi is open next.
     expect(find.text('Oobli guessed Food & Dining'), findsOneWidget);
     expect(find.text('Skip'), findsOneWidget);
     expect(find.text('Fees & Charges'), findsOneWidget);
+  });
+
+  testWidgets('Quick sort: older ones can be cleared in one tap, and search finds anything', (tester) async {
+    final older = SortQueue.older(fixtureTransactions(), DateTime.now()).length;
+    await render(tester, const QuickSortScreen(), null);
+    await tester.tap(find.text('Older · $older'));
+    await settle(tester);
+    expect(find.text("Keep Oobli's guesses for all $older"), findsOneWidget);
+    await tester.tap(find.text("Keep Oobli's guesses for all $older"));
+    await settle(tester);
+    expect(find.text('Older · 0'), findsOneWidget);
+    expect(find.text('All sorted!'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'netflix');
+    await settle(tester);
+    expect(find.text('Netflix'), findsNWidgets(2), reason: 'both payments, sorted or not');
+    expect(find.textContaining('This week ·'), findsNothing, reason: 'tabs hide while searching');
   });
 
   testWidgets('Analytics', (tester) async {

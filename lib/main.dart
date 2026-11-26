@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'core/network/resilient_http_overrides.dart';
+import 'data/local/local_cache.dart';
 import 'state/preferences.dart';
 
 Future<void> main() async {
@@ -16,10 +17,14 @@ Future<void> main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   final prefs = await SharedPreferences.getInstance();
+  final cache = await FileCache.open();
 
   runApp(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        localCacheProvider.overrideWithValue(cache),
+      ],
       child: const OobliApp(),
     ),
   );

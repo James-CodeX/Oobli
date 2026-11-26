@@ -10,6 +10,7 @@ import 'package:oobli/domain/money_moves.dart';
 import 'package:oobli/domain/natural_search.dart';
 import 'package:oobli/domain/similar_merchants.dart';
 import 'package:oobli/state/auth_controller.dart';
+import 'package:oobli/state/sync_engine.dart';
 import 'package:oobli/state/transactions_controller.dart';
 
 import 'support/fakes.dart';
@@ -237,6 +238,7 @@ void main() {
       expect(await container.read(transactionsProvider.notifier).detectMoneyMoves(), 2);
       final txs = container.read(transactionsProvider).value!;
       expect(txs.every((t) => t.category == TxCategory.ownTransfer && t.needsReview), isTrue);
+      await container.read(outboxProvider.notifier).flush();
       expect(txRepo.writes.values.toSet(), {TxCategory.ownTransfer});
       expect(await container.read(transactionsProvider.notifier).detectMoneyMoves(), 0, reason: 'idempotent');
     });

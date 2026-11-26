@@ -22,6 +22,7 @@ class Transaction {
     this.confirmed = false,
     this.note,
     this.balance,
+    this.deleted = false,
   });
 
   final String id;
@@ -39,6 +40,10 @@ class Transaction {
   final bool confirmed;
   final String? note;
   final double? balance;
+
+  /// Deleted on some device; kept as a tombstone so other devices' delta
+  /// syncs learn about it. Never shown.
+  final bool deleted;
 
   bool get isOutgoing => direction == TxDirection.out;
 
@@ -65,7 +70,20 @@ class Transaction {
         confirmed: d['confirmed'] as bool? ?? false,
         note: d['note'] as String?,
         balance: (d['balance'] as num?)?.toDouble(),
+        deleted: d['deleted'] == true,
       );
+
+  /// The on-device cache form: the row plus its id.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        ...toRow(''),
+        if (deleted) 'deleted': true,
+      }..remove('userId');
+
+  factory Transaction.fromJson(Map<String, dynamic> j) => Transaction.fromRow(j['id'] as String, j);
+
+  /// This transaction with [patch] (row fields, as sent to Appwrite) applied.
+  Transaction applyPatch(Map<String, dynamic> patch) => Transaction.fromJson({...toJson(), ...patch});
 
   Map<String, dynamic> toRow(String userId) => {
         'userId': userId,

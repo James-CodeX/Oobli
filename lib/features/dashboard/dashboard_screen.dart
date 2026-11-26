@@ -7,7 +7,11 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../state/auth_controller.dart';
+import '../../data/models/category.dart';
+import '../../data/models/transaction.dart';
 import '../../state/insights_controller.dart';
+import '../../state/preferences.dart';
+import '../../state/sync_engine.dart';
 import '../../state/transactions_controller.dart';
 import '../../ui/widgets/charts.dart';
 import '../../ui/widgets/feedback.dart';
@@ -51,12 +55,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _refresh() async {
     final profile = ref.read(authControllerProvider).value;
     try {
+      // Upload waiting changes and pull only what changed on the server.
+      final online = await ref.read(transactionsProvider.notifier).refresh();
+      if (!online) {
+        if (mounted) showOobliSnack(context, "You're offline. Showing your saved numbers.");
+        return;
+      }
       if (profile?.smsSyncEnabled ?? false) {
         final added = await ref.read(smsSyncControllerProvider.notifier).sync();
         if (mounted && added > 0) showOobliSnack(context, 'Oobli found $added new transactions');
-      } else {
-        ref.invalidate(transactionsProvider);
-        await ref.read(transactionsProvider.future);
       }
     } catch (e) {
       if (mounted) showFailure(context, e);
@@ -89,6 +96,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   syncing: sync.isSyncing,
                 ),
               ),
+              const SliverToBoxAdapter(child: _ConnectionBanner()),
               ...txs.when(
                 loading: () => [const SliverToBoxAdapter(child: _LoadingFeed())],
                 error: (e, _) => [
@@ -101,6 +109,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ? [SliverFillRemaining(hasScrollBody: false, child: _EmptyFeed(smsEnabled: profile?.smsSyncEnabled ?? false))]
                     : [
                         const SliverToBoxAdapter(child: _SortBanner()),
+                        const SliverToBoxAdapter(child: _BigOneCard()),
                         const SliverToBoxAdapter(child: _TodayFlowCard()),
                         const SliverToBoxAdapter(child: _BillsCard()),
                         const SliverToBoxAdapter(child: _DistributionCard()),
@@ -183,7 +192,165 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Shortcut into Quick sort while transactions are waiting for a category.
+/// "Offline · showing your numbers from 12:40" while the server can't be
+/// reached; the data on screen is the phone's saved copy.
+class _ConnectionBanner extends ConsumerWidget {
+  const _ConnectionBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = context.text;
+    final net = ref.watch(netStatusProvider);
+    final pending = ref.watch(outboxProvider);
+    final synced = net.lastSynced;
+    final when = synced == null
+        ? ''
+        : Fmt.relativeDay(synced) == 'Today'
+            ? ' from ${Fmt.time12(synced)}'
+            : ' from ${Fmt.relativeDay(synced)}, ${Fmt.time12(synced)}';
+    return AnimatedSize(
+      duration: Motion.medium,
+      child: !net.offline
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
+              child: OobliCard(
+                color: c.surfaceVariant,
+                borderColor: Colors.transparent,
+                padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: Sp.sm),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_off_rounded, size: 20, color: c.secondaryText),
+                    const SizedBox(width: Sp.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("You're offline", style: t.labelLarge),
+                          Text(
+                            [
+                              'Showing your numbers$when',
+                              if (pending > 0) '$pending ${pending == 1 ? 'change' : 'changes'} will upload when you\'re back',
+                            ].join(' · '),
+                            style: t.labelSmall.copyWith(color: c.secondaryText),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Pressable(
+                      onTap: () => ref.read(transactionsProvider.notifier).refresh(),
+                      semanticLabel: 'Try to reconnect',
+                      child: Padding(
+                        padding: const EdgeInsets.all(Sp.xs),
+                        child: Text('Retry', style: t.labelLarge.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Today's biggest unsorted spend, asked about right here: one tap files it.
+class _BigOneCard extends ConsumerWidget {
+  const _BigOneCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = context.text;
+    final tx = ref.watch(bigOneTodayProvider);
+    return AnimatedSize(
+      duration: Motion.medium,
+      alignment: Alignment.topCenter,
+      child: tx == null
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              key: ValueKey(tx.id),
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
+              child: OobliCard(
+                shadow: true,
+                borderColor: c.warning.withValues(alpha: 0.5),
+                padding: const EdgeInsets.all(Sp.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.priority_high_rounded, size: 18, color: c.warning),
+                        const SizedBox(width: Sp.xs),
+                        Text('Big one today', style: t.labelLarge.copyWith(color: c.warning, fontWeight: FontWeight.w800)),
+                        const Spacer(),
+                        Text(Fmt.time12(tx.occurredAt), style: t.labelSmall.copyWith(color: c.hint)),
+                      ],
+                    ),
+                    const SizedBox(height: Sp.sm),
+                    Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: Fmt.kes(tx.amount), style: t.titleMedium.copyWith(fontWeight: FontWeight.w800)),
+                        TextSpan(text: '  to ${tx.merchant}', style: t.bodyMedium.copyWith(color: c.secondaryText)),
+                      ]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text('What was it for?', style: t.bodySmall.copyWith(color: c.secondaryText)),
+                    const SizedBox(height: Sp.sm),
+                    Wrap(
+                      spacing: Sp.sm,
+                      runSpacing: Sp.sm,
+                      children: [
+                        for (final cat in _suggestions(ref, tx))
+                          CategoryChip(
+                            category: cat,
+                            selected: false,
+                            onTap: () => _file(context, ref, tx, cat),
+                          ),
+                        Pressable(
+                          onTap: () => context.push('${Routes.quickSort}?focus=${tx.id}'),
+                          semanticLabel: 'More categories',
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            child: Text('More…', style: t.labelMedium.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  /// Oobli's guess first, then the categories this user files big spends
+  /// under most often.
+  static List<TxCategory> _suggestions(WidgetRef ref, Transaction tx) {
+    final counts = <TxCategory, int>{};
+    for (final t in ref.read(transactionsProvider).value ?? const <Transaction>[]) {
+      if (t.confirmed && t.isOutgoing) counts[t.category] = (counts[t.category] ?? 0) + 1;
+    }
+    final usual = counts.keys.toList()..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+    return {
+      if (tx.category != TxCategory.other) tx.category,
+      ...usual,
+      TxCategory.rent,
+      TxCategory.shopping,
+      TxCategory.transfer,
+    }.where((cat) => cat.fits(inbound: false)).take(5).toList();
+  }
+
+  static void _file(BuildContext context, WidgetRef ref, Transaction tx, TxCategory category) {
+    final remember = ref.read(localStoreProvider).quickSortRemember;
+    ref.read(transactionsProvider.notifier).quickCategorize(tx, category, remember: remember);
+    showOobliSnack(context, '${Fmt.kes(tx.amount)} to ${tx.merchant} filed under ${category.label}');
+  }
+}
+
+/// Shortcut into Quick sort while this week's transactions wait for a category.
 class _SortBanner extends ConsumerWidget {
   const _SortBanner();
 
@@ -209,7 +376,7 @@ class _SortBanner extends ConsumerWidget {
               const SizedBox(width: Sp.sm),
               Expanded(
                 child: Text(
-                  '$count to sort · one tap each',
+                  '$count to sort from this week · one tap each',
                   style: t.labelLarge.copyWith(color: c.onPrimaryContainer),
                 ),
               ),

@@ -20,6 +20,23 @@ class AppFailure implements Exception {
 
   static const offline = "You're offline or the connection is weak. Check your internet and try again.";
 
+  /// True when trying again later may succeed: no connection, timeouts,
+  /// server errors, rate limits or an expired session. False for errors
+  /// that will fail the same way every time (bad input, row not found).
+  static bool isRetryable(Object error) {
+    if (error is AppFailure) {
+      if (error.cause != null) return isRetryable(error.cause!);
+      final code = error.code;
+      return code == null || code >= 500 || code == 429 || code == 408 || code == 401;
+    }
+    if (error is AppwriteException) {
+      final code = error.code;
+      return code == null || code == 0 || code >= 500 || code == 429 || code == 408 || code == 401;
+    }
+    return error is SocketException || error is TimeoutException || error is HttpException ||
+        error is HandshakeException || error is TlsException;
+  }
+
   factory AppFailure.from(Object error) {
     if (error is AppFailure) return error;
     if (error is AppwriteException) {

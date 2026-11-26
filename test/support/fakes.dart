@@ -203,10 +203,19 @@ class OfflineAi implements AiService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// Records category writes; set [fail] to make them throw.
+/// Records category writes; set [fail] to make them throw (like being offline).
 class FakeTxRepo implements TransactionRepository {
   final writes = <String, TxCategory>{};
+  final patches = <String, Map<String, dynamic>>{};
   bool fail = false;
+
+  @override
+  Future<void> patch(String txId, Map<String, dynamic> data) async {
+    await Future<void>.delayed(Duration.zero);
+    if (fail) throw const AppFailure('Network down');
+    patches[txId] = {...?patches[txId], ...data};
+    if (data['category'] case final String key) writes[txId] = TxCategory.fromKey(key);
+  }
 
   @override
   Future<void> updateCategory(String txId, TxCategory category, {required bool confirmed}) async {
@@ -229,9 +238,13 @@ class FakeTxRepo implements TransactionRepository {
 
 class FakeRuleRepo implements MerchantRuleRepository {
   final saved = <String, TxCategory>{};
+  bool fail = false;
 
   @override
-  Future<void> save(String userId, String merchant, TxCategory category) async => saved[merchant] = category;
+  Future<void> save(String userId, String merchant, TxCategory category) async {
+    if (fail) throw const AppFailure('Network down');
+    saved[merchant] = category;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

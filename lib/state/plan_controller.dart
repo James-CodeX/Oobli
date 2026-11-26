@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/errors/app_failure.dart';
 import '../core/utils/formatters.dart';
+import '../data/local/local_cache.dart';
 import '../data/models/category.dart';
 import '../data/models/plan.dart';
 import '../data/repositories/plan_repository.dart';
@@ -38,8 +41,25 @@ class PlanController extends AsyncNotifier<Plan?> {
   Future<Plan?> build() async {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return null;
-    return ref.read(planRepositoryProvider).fetch(userId, currentMonth);
+    final month = currentMonth;
+    final cache = ref.read(localCacheProvider);
+    final name = 'plan_${userId}_$month';
+    listenSelf((_, next) {
+      if (next.hasValue && !next.isLoading) unawaited(cache.write(name, {'v': _encode(next.value)}));
+    });
+    return cacheFirst<Plan?>(
+      cache: cache,
+      name: name,
+      fetch: () => ref.read(planRepositoryProvider).fetch(userId, month),
+      encode: _encode,
+      decode: (j) => j == null ? null : Plan.fromRow((j as Map)['id'] as String, Map<String, dynamic>.from(j)),
+      onFresh: (fresh) {
+        if (ref.mounted && ref.read(currentUserIdProvider) == userId) state = AsyncData(fresh);
+      },
+    );
   }
+
+  static Map<String, dynamic>? _encode(Plan? plan) => plan == null ? null : {'id': plan.id, ...plan.toRow('')};
 
   /// Drafts a plan with Gemini; falls back to a 50/20/20/10 split offline.
   Future<Plan> generate({required double income, required String goal}) async {

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/config/app_config.dart';
 import '../core/errors/app_failure.dart';
+import '../data/local/local_cache.dart';
 import '../data/models/category.dart';
 import '../data/models/transaction.dart';
 import '../data/repositories/merchant_rule_repository.dart';
@@ -13,9 +16,11 @@ import '../data/services/ai_service.dart';
 import '../domain/bills.dart';
 import '../domain/money_moves.dart';
 import '../domain/similar_merchants.dart';
+import '../domain/sorting.dart';
 import '../domain/spending_stats.dart';
 import 'auth_controller.dart';
 import 'preferences.dart';
+import 'sync_engine.dart';
 
 final transactionsProvider =
     AsyncNotifierProvider<TransactionsController, List<Transaction>>(TransactionsController.new);
@@ -25,9 +30,28 @@ final statsProvider = Provider<SpendingStats>(
   (ref) => SpendingStats(ref.watch(transactionsProvider).value ?? const []),
 );
 
-/// Transactions nobody has confirmed yet: the Quick sort queue.
+/// From what amount a spend counts as "big" for this user.
+final bigAmountProvider = Provider<double>(
+  (ref) => SortPolicy.bigAmount(ref.watch(transactionsProvider).value ?? const [], DateTime.now()),
+);
+
+/// Waiting in Quick sort from the last 7 days: what the home banner counts.
 final unsortedCountProvider = Provider<int>(
-  (ref) => (ref.watch(transactionsProvider).value ?? const []).where((t) => !t.confirmed).length,
+  (ref) => SortQueue.recent(ref.watch(transactionsProvider).value ?? const [], DateTime.now()).length,
+);
+
+/// Waiting from before the last 7 days (optional in Quick sort).
+final olderUnsortedCountProvider = Provider<int>(
+  (ref) => SortQueue.older(ref.watch(transactionsProvider).value ?? const [], DateTime.now()).length,
+);
+
+/// Today's biggest unsorted spend, asked about right on the home screen.
+final bigOneTodayProvider = Provider<Transaction?>(
+  (ref) => SortQueue.bigOneToday(
+    ref.watch(transactionsProvider).value ?? const [],
+    DateTime.now(),
+    ref.watch(bigAmountProvider),
+  ),
 );
 
 /// Repeating payments due in the next two weeks, plus the last known balance.
@@ -37,34 +61,115 @@ final billForecastProvider = Provider<BillForecast>((ref) {
   return BillPredictor.forecast(txs, now: DateTime.now());
 });
 
+// ---------- Auto-sort status ----------
+
+@immutable
+class AutoSortStatus {
+  const AutoSortStatus({this.asking = 0, this.filed = 0});
+
+  /// Transactions currently with the AI (0 when idle).
+  final int asking;
+
+  /// How many the last run filed on its own.
+  final int filed;
+
+  bool get running => asking > 0;
+}
+
+final autoSortStatusProvider = NotifierProvider<AutoSortStatusController, AutoSortStatus>(AutoSortStatusController.new);
+
+class AutoSortStatusController extends Notifier<AutoSortStatus> {
+  @override
+  AutoSortStatus build() => const AutoSortStatus();
+
+  void asking(int count) => state = AutoSortStatus(asking: count, filed: state.filed);
+  void done(int filed) => state = AutoSortStatus(filed: filed);
+}
+
+// ---------- Merchant rules ----------
+
 final merchantRulesProvider =
     AsyncNotifierProvider<MerchantRulesController, Map<String, TxCategory>>(MerchantRulesController.new);
 
+/// The user's "always file X as Y" rules, keyed by normalised merchant.
+/// Shown from the phone's copy at once, saved through the outbox.
 class MerchantRulesController extends AsyncNotifier<Map<String, TxCategory>> {
+  static String _cacheName(String uid) => 'rules_$uid';
+
   @override
   Future<Map<String, TxCategory>> build() async {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const {};
-    return ref.read(merchantRuleRepositoryProvider).fetchAll(userId);
+    return cacheFirst<Map<String, TxCategory>>(
+      cache: ref.read(localCacheProvider),
+      name: _cacheName(userId),
+      fetch: () => ref.read(merchantRuleRepositoryProvider).fetchAll(userId),
+      encode: _encode,
+      decode: (j) => {
+        for (final e in (j as Map).entries) e.key as String: TxCategory.fromKey(e.value as String?),
+      },
+      onFresh: (fresh) {
+        if (!ref.mounted || ref.read(currentUserIdProvider) != userId) return;
+        // Rules saved on this phone but not uploaded yet still count.
+        state = AsyncData({...fresh, ...ref.read(outboxProvider.notifier).pendingRules});
+      },
+    );
   }
 
+  static Map<String, String> _encode(Map<String, TxCategory> rules) => {
+        for (final e in rules.entries) e.key: e.value.key,
+      };
+
+  void _saveCache(Map<String, TxCategory> rules) {
+    final uid = ref.read(currentUserIdProvider);
+    if (uid == null) return;
+    unawaited(ref.read(localCacheProvider).write(_cacheName(uid), {'v': _encode(rules)}));
+  }
+
+  /// Learns a rule at once; it uploads in the background.
   Future<void> save(String merchant, TxCategory category) async {
-    final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return;
-    await ref.read(merchantRuleRepositoryProvider).save(userId, merchant, category);
-    state = AsyncData({...?state.value, Transaction.merchantKey(merchant): category});
+    final key = Transaction.merchantKey(merchant);
+    if (key.isEmpty || ref.read(currentUserIdProvider) == null) return;
+    ref.read(outboxProvider.notifier).saveRule(merchant, category);
+    final next = {...?state.value, key: category};
+    state = AsyncData(next);
+    _saveCache(next);
   }
 
   Future<void> remove(String merchantKey) async {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
     await ref.read(merchantRuleRepositoryProvider).delete(userId, merchantKey);
-    state = AsyncData({...?state.value}..remove(merchantKey));
+    final next = {...?state.value}..remove(merchantKey);
+    state = AsyncData(next);
+    _saveCache(next);
   }
 }
 
+// ---------- Transactions ----------
+
+/// The heart of the app's data.
+///
+/// * **Offline first.** The last synced copy is kept on the phone and shown
+///   instantly, with or without internet. Fresh data is pulled in the
+///   background.
+/// * **Delta sync.** After the first load only rows changed since the last
+///   pull are downloaded (by server `$updatedAt`), not the whole history.
+/// * **Instant edits.** Changes apply on screen at once and go through the
+///   [Outbox], which batches, merges, retries and survives restarts.
+/// * **Auto-sort.** What Oobli is sure of is filed for the user (on-device
+///   rules first, then the AI in bulk), so Quick sort only asks about the
+///   rest (see [SortPolicy]).
 class TransactionsController extends AsyncNotifier<List<Transaction>> {
   TransactionRepository get _repo => ref.read(transactionRepositoryProvider);
+  LocalCache get _cache => ref.read(localCacheProvider);
+  Outbox get _outbox => ref.read(outboxProvider.notifier);
+
+  /// Server time of the newest change pulled so far.
+  DateTime? _pulledAt;
+  Future<bool>? _refreshing;
+  Future<int>? _autoSorting;
+  Timer? _saveTimer;
 
   String get _userId {
     final id = ref.read(currentUserIdProvider);
@@ -72,18 +177,178 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
     return id;
   }
 
+  static String _cacheName(String uid) => 'transactions_$uid';
+  static String _reviewedName(String uid) => 'ai_reviewed_$uid';
+  static DateTime get _windowStart => DateTime.now().subtract(AppConfig.historyWindow);
+
   @override
   Future<List<Transaction>> build() async {
     final userId = ref.watch(currentUserIdProvider);
+    _pulledAt = null;
+    _refreshing = null;
+    ref.onDispose(() => _saveTimer?.cancel());
     if (userId == null) return const [];
-    return _repo.fetchSince(userId, DateTime.now().subtract(AppConfig.historyWindow));
+    _outbox.onRejected = _reconcile;
+
+    final saved = await _readCache(userId);
+    if (saved != null) {
+      _pulledAt = saved.pulledAt;
+      ref.read(netStatusProvider.notifier).restore(saved.savedAt);
+      // Show the saved copy now; bring it up to date once it is on screen.
+      Future(() async {
+        await future;
+        if (ref.mounted && ref.read(currentUserIdProvider) == userId) await refresh();
+      });
+      return _sorted(_withPending(saved.items));
+    }
+
+    final pull = await _repo.fetchSince(userId, _windowStart);
+    _pulledAt = pull.latest;
+    ref.read(netStatusProvider.notifier).synced();
+    final items = _sorted(pull.items);
+    Future(() async {
+      await future;
+      if (!ref.mounted) return;
+      _saveNow();
+      await autoSort();
+    });
+    return items;
   }
 
   List<Transaction> get _current => state.value ?? const [];
 
+  static List<Transaction> _sorted(List<Transaction> txs) =>
+      [...txs]..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
   void _set(List<Transaction> txs) {
-    state = AsyncData([...txs]..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)));
+    state = AsyncData(_sorted(txs));
+    _scheduleSave();
   }
+
+  /// Lays changes that haven't uploaded yet over rows from the server or cache.
+  List<Transaction> _withPending(List<Transaction> txs) {
+    final pending = ref.read(outboxProvider.notifier).pendingPatches;
+    return [
+      for (final t in txs)
+        if (pending[t.id] case final patch?) t.applyPatch(patch) else t,
+    ].where((t) => !t.deleted).toList();
+  }
+
+  // ----- On-device copy -----
+
+  Future<({List<Transaction> items, DateTime? pulledAt, DateTime? savedAt})?> _readCache(String uid) async {
+    try {
+      final saved = await _cache.read(_cacheName(uid));
+      if (saved == null || saved['v'] != 1) return null;
+      final start = _windowStart;
+      return (
+        items: [
+          for (final j in saved['items'] as List)
+            if (Transaction.fromJson(Map<String, dynamic>.from(j as Map)) case final t
+                when !t.occurredAt.isBefore(start))
+              t,
+        ],
+        pulledAt: DateTime.tryParse(saved['pulledAt'] as String? ?? ''),
+        savedAt: DateTime.tryParse(saved['syncedAt'] as String? ?? ''),
+      );
+    } catch (e) {
+      debugPrint('Ignoring unreadable transactions cache: $e');
+      return null;
+    }
+  }
+
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 500), _saveNow);
+  }
+
+  void _saveNow() {
+    _saveTimer?.cancel();
+    final uid = ref.read(currentUserIdProvider);
+    final items = state.value;
+    if (uid == null || items == null) return;
+    final synced = ref.read(netStatusProvider).lastSynced;
+    unawaited(_cache.write(_cacheName(uid), {
+      'v': 1,
+      'pulledAt': _pulledAt?.toUtc().toIso8601String(),
+      'syncedAt': synced?.toIso8601String(),
+      'items': [for (final t in items) t.toJson()],
+    }).catchError((Object e) => debugPrint('Could not save transactions offline: $e')));
+  }
+
+  // ----- Sync with the server -----
+
+  /// Uploads waiting changes, then pulls what changed on the server. Safe to
+  /// call often (one run at a time). Returns false when offline.
+  Future<bool> refresh() => _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
+
+  Future<bool> _refresh() async {
+    final uid = ref.read(currentUserIdProvider);
+    if (uid == null) return false;
+    try {
+      await future;
+    } catch (_) {
+      // The first load failed (offline with nothing saved): retry it below.
+    }
+    if (!ref.mounted || ref.read(currentUserIdProvider) != uid) return false;
+    final status = ref.read(netStatusProvider.notifier);
+    try {
+      final uploaded = await _outbox.flush();
+      if (!uploaded) throw const AppFailure(AppFailure.offline);
+      final since = _pulledAt;
+      if (since == null || state.value == null) {
+        final pull = await _repo.fetchSince(uid, _windowStart);
+        if (!ref.mounted || ref.read(currentUserIdProvider) != uid) return false;
+        _pulledAt = pull.latest;
+        _set(_withPending(pull.items));
+      } else {
+        final pull = await _repo.fetchChanged(uid, since);
+        if (!ref.mounted || ref.read(currentUserIdProvider) != uid) return false;
+        if (pull.items.isNotEmpty) {
+          final byId = {for (final t in _current) t.id: t};
+          for (final t in pull.items) {
+            if (t.deleted) {
+              byId.remove(t.id);
+            } else {
+              byId[t.id] = t;
+            }
+          }
+          final start = _windowStart;
+          _set(_withPending(byId.values.where((t) => !t.occurredAt.isBefore(start)).toList()));
+        }
+        if (pull.latest != null && pull.latest!.isAfter(since)) _pulledAt = pull.latest;
+      }
+      status.synced();
+      _saveNow();
+      unawaited(autoSort());
+      return true;
+    } catch (e) {
+      debugPrint('Refresh failed: $e');
+      if (AppFailure.isRetryable(e)) status.offline();
+      if (state.hasError && ref.mounted) state = AsyncError(AppFailure.from(e), StackTrace.current);
+      return false;
+    }
+  }
+
+  /// The server refused a queued change for good: show its real copy.
+  void _reconcile(List<String> ids) {
+    Future(() async {
+      for (final id in ids) {
+        try {
+          final server = await _repo.get(id);
+          if (!ref.mounted) return;
+          _set([
+            for (final t in _current)
+              if (t.id != id) t else if (server != null && !server.deleted) server,
+          ]);
+        } catch (e) {
+          debugPrint('Could not reload $id: $e');
+        }
+      }
+    });
+  }
+
+  // ----- Edits (instant; uploaded by the outbox) -----
 
   Future<Transaction> add(Transaction tx, {bool learnRule = false}) async {
     final created = await _repo.create(_userId, tx);
@@ -97,11 +362,10 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
   /// Saves an edited transaction. With [applyToMerchant] the category is
   /// learned and applied to every transaction from the same merchant.
   Future<void> edit(Transaction before, Transaction after, {bool applyToMerchant = false}) async {
+    final userId = _userId;
     final categoryChanged = before.category != after.category;
-    final updated = await _repo.update(
-      _userId,
-      after.copyWith(confirmed: true, aiCategorized: before.aiCategorized && !categoryChanged),
-    );
+    final updated = after.copyWith(confirmed: true, aiCategorized: before.aiCategorized && !categoryChanged);
+    _outbox.patchTx(updated.id, updated.toRow(userId)..remove('userId'));
     if (categoryChanged && before.aiCategorized) {
       await ref.read(localStoreProvider).incrementAiCorrections();
     }
@@ -113,14 +377,12 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
 
   /// "Yes" on an AI suggestion: keep the category and remember it.
   Future<void> confirm(Transaction tx) async {
-    await _repo.updateCategory(tx.id, tx.category, confirmed: true);
+    _outbox.patchTx(tx.id, {'category': tx.category.key, 'confirmed': true});
     _set([for (final t in _current) t.id == tx.id ? t.copyWith(confirmed: true) : t]);
     await ref.read(merchantRulesProvider.notifier).save(tx.merchant, tx.category);
   }
 
-  /// Quick sort: files [tx] under [category] and confirms it. The change is
-  /// shown at once and written in the background; if the write fails the
-  /// change is rolled back and the error rethrown.
+  /// Quick sort: files [tx] under [category] and confirms it, instantly.
   ///
   /// With [remember] the rule is learned and every other unconfirmed
   /// transaction from the same merchant, in the same direction, is filed the
@@ -128,43 +390,145 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
   Future<int> quickCategorize(Transaction tx, TxCategory category, {bool remember = false}) async {
     final learn = remember && canLearn(tx, category);
     final key = Transaction.merchantKey(tx.merchant);
-    final targets = [
-      tx,
+    final targets = {
+      tx.id,
       if (learn)
-        ..._current.where((t) =>
-            t.id != tx.id &&
-            !t.confirmed &&
-            t.direction == tx.direction &&
-            Transaction.merchantKey(t.merchant) == key),
-    ];
-    final before = {for (final t in targets) t.id: t};
+        for (final t in _current)
+          if (!t.confirmed && t.direction == tx.direction && Transaction.merchantKey(t.merchant) == key) t.id,
+    };
+    final patches = <String, Map<String, dynamic>>{};
     _set([
       for (final t in _current)
-        before.containsKey(t.id)
-            ? t.copyWith(
-                category: category,
-                confirmed: true,
-                aiCategorized: t.aiCategorized && t.category == category,
-              )
-            : t,
+        if (targets.contains(t.id))
+          () {
+            final next = t.copyWith(
+              category: category,
+              confirmed: true,
+              aiCategorized: t.aiCategorized && t.category == category,
+            );
+            patches[t.id] = {'category': category.key, 'confirmed': true, 'aiCategorized': next.aiCategorized};
+            return next;
+          }()
+        else
+          t,
     ]);
-    try {
-      for (var i = 0; i < targets.length; i += 6) {
-        await Future.wait(targets
-            .skip(i)
-            .take(6)
-            .map((t) => _repo.updateCategory(t.id, category, confirmed: true)));
-      }
-      if (tx.aiCategorized && tx.category != category) {
-        await ref.read(localStoreProvider).incrementAiCorrections();
-      }
-      if (learn) await ref.read(merchantRulesProvider.notifier).save(tx.merchant, category);
-      return targets.length;
-    } catch (e) {
-      // Restore only what this call changed; later picks stay as they are.
-      _set([for (final t in _current) before[t.id] ?? t]);
-      throw AppFailure.from(e);
+    _outbox.patchMany(patches);
+    if (tx.aiCategorized && tx.category != category) {
+      await ref.read(localStoreProvider).incrementAiCorrections();
     }
+    if (learn) await ref.read(merchantRulesProvider.notifier).save(tx.merchant, category);
+    return patches.length;
+  }
+
+  /// "Keep Oobli's guesses": confirms [txs] as they are. Returns the count.
+  int acceptGuesses(Iterable<Transaction> txs) {
+    final ids = {for (final t in txs) if (!t.confirmed) t.id};
+    if (ids.isEmpty) return 0;
+    _set([for (final t in _current) ids.contains(t.id) ? t.copyWith(confirmed: true) : t]);
+    _outbox.patchMany({for (final id in ids) id: {'confirmed': true}});
+    return ids.length;
+  }
+
+  /// Files everything Oobli is sure about, so Quick sort only asks about the
+  /// rest: first with on-device knowledge (rules, message types, known
+  /// merchants), then by asking the AI about the remainder in bulk. Each
+  /// transaction goes to the AI once. Returns how many were filed.
+  Future<int> autoSort() => _autoSorting ??= _autoSort().whenComplete(() => _autoSorting = null);
+
+  Future<int> _autoSort() async {
+    final uid = ref.read(currentUserIdProvider);
+    final txs = state.value;
+    if (uid == null || txs == null) return 0;
+    final unsorted = [for (final t in txs) if (!t.confirmed) t];
+    if (unsorted.isEmpty) return 0;
+
+    Map<String, TxCategory> rules;
+    try {
+      rules = await ref.read(merchantRulesProvider.future);
+    } catch (_) {
+      rules = const {};
+    }
+    if (!ref.mounted) return 0;
+    final owner = ref.read(authControllerProvider).value?.name;
+    final patches = <String, Map<String, dynamic>>{};
+    final rest = <Transaction>[];
+    for (final t in unsorted) {
+      final sure = SortPolicy.certain(t, rules: rules, ownerName: owner);
+      if (sure != null && sure.fits(inbound: !t.isOutgoing)) {
+        patches[t.id] = {'category': sure.key, 'confirmed': true};
+      } else {
+        rest.add(t);
+      }
+    }
+
+    final reviewed = await _reviewed(uid);
+    if (!ref.mounted) return 0;
+    final ask = rest.where((t) => !reviewed.contains(t.id)).take(600).toList();
+    final status = ref.read(autoSortStatusProvider.notifier);
+    if (ask.isNotEmpty) {
+      status.asking(ask.length);
+      try {
+        final big = SortPolicy.bigAmount(txs, DateTime.now());
+        final answers = await ref.read(aiServiceProvider).categorize([
+          for (final t in ask)
+            {
+              'id': t.id,
+              'merchant': t.merchant,
+              'channel': t.channel.key,
+              'direction': t.isOutgoing ? 'out' : 'in',
+              'amount': t.amount,
+            },
+        ], rules: rules);
+        if (!ref.mounted) return 0;
+        for (final t in ask) {
+          final a = answers[t.id];
+          if (a == null) continue;
+          reviewed.add(t.id);
+          if (!a.category.fits(inbound: !t.isOutgoing)) continue;
+          if (SortPolicy.aiIsSure(a.category, a.confidence, big: SortPolicy.isBig(t, big))) {
+            patches[t.id] = {'category': a.category.key, 'confirmed': true, 'aiCategorized': true};
+          } else if (a.category != t.category) {
+            patches[t.id] = {'category': a.category.key, 'aiCategorized': true};
+          }
+        }
+        await _cache.write(_reviewedName(uid), {'ids': reviewed.toList()});
+      } catch (e) {
+        debugPrint('AI auto-sort unavailable: $e');
+      }
+    }
+
+    if (!ref.mounted || ref.read(currentUserIdProvider) != uid) return 0;
+    // The user may have sorted some of these meanwhile: their choice wins.
+    final applied = <String, Map<String, dynamic>>{};
+    _set([
+      for (final t in _current)
+        if (patches[t.id] case final p? when !t.confirmed) () {
+          applied[t.id] = p;
+          return t.applyPatch(p);
+        }() else t,
+    ]);
+    if (applied.isNotEmpty) _outbox.patchMany(applied);
+    final filed = applied.values.where((p) => p['confirmed'] == true).length;
+    status.done(filed);
+    return filed;
+  }
+
+  Future<Set<String>> _reviewed(String uid) async {
+    try {
+      final saved = await _cache.read(_reviewedName(uid));
+      return {...?(saved?['ids'] as List?)?.cast<String>()};
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  /// Transactions the AI already judged (at import) don't need asking again.
+  Future<void> markReviewed(Iterable<String> ids) async {
+    final uid = ref.read(currentUserIdProvider);
+    if (uid == null || ids.isEmpty) return;
+    final reviewed = await _reviewed(uid)
+      ..addAll(ids);
+    await _cache.write(_reviewedName(uid), {'ids': reviewed.toList()});
   }
 
   /// Marks out-and-back round trips (refunds, money returned) as Own transfer
@@ -177,19 +541,11 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
       for (final m in moves)
         for (final t in m.both) t.id: t.copyWith(category: TxCategory.ownTransfer, aiCategorized: true, confirmed: false),
     };
-    final before = {for (final t in _current) if (changed.containsKey(t.id)) t.id: t};
     _set([for (final t in _current) changed[t.id] ?? t]);
-    try {
-      final userId = _userId;
-      for (final t in changed.values) {
-        await _repo.update(userId, t);
-      }
-      return changed.length;
-    } catch (e) {
-      _set([for (final t in _current) before[t.id] ?? t]);
-      debugPrint('Could not save money moves: $e');
-      return 0;
-    }
+    _outbox.patchMany({
+      for (final id in changed.keys) id: {'category': TxCategory.ownTransfer.key, 'aiCategorized': true, 'confirmed': false},
+    });
+    return changed.length;
   }
 
   /// Other merchants that probably belong in [category] too, after the user
@@ -233,7 +589,7 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
   static bool canLearn(Transaction tx, TxCategory category) => tx.isOutgoing || category.receivingOnly;
 
   Future<void> delete(Transaction tx) async {
-    await _repo.delete(tx.id);
+    _outbox.patchTx(tx.id, {'deleted': true});
     _set(_current.where((t) => t.id != tx.id).toList());
   }
 
@@ -241,26 +597,21 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
   /// Only transactions the category fits are touched (money in stays money in).
   Future<int> recategorizeMerchant(String merchant, TxCategory category, {TxDirection? direction}) async {
     final key = Transaction.merchantKey(merchant);
-    final targets = _current
-        .where((t) =>
-            Transaction.merchantKey(t.merchant) == key &&
+    final ids = {
+      for (final t in _current)
+        if (Transaction.merchantKey(t.merchant) == key &&
             t.category != category &&
             (direction == null || t.direction == direction) &&
             category.fits(inbound: !t.isOutgoing))
-        .toList();
-    for (var i = 0; i < targets.length; i += 6) {
-      await Future.wait(targets
-          .skip(i)
-          .take(6)
-          .map((t) => _repo.updateCategory(t.id, category, confirmed: true)));
-    }
-    final ids = targets.map((t) => t.id).toSet();
+          t.id,
+    };
     _set([
       for (final t in _current)
         ids.contains(t.id) ? t.copyWith(category: category, confirmed: true) : t,
     ]);
+    _outbox.patchMany({for (final id in ids) id: {'category': category.key, 'confirmed': true}});
     await ref.read(merchantRulesProvider.notifier).save(merchant, category);
-    return targets.length;
+    return ids.length;
   }
 
   void _merge(List<Transaction> added) {
@@ -318,10 +669,15 @@ class SmsSyncController extends Notifier<SyncState> {
             since: since,
             rules: rules,
             ownerName: profile.name,
+            bigAmount: ref.read(bigAmountProvider),
           );
       final transactions = ref.read(transactionsProvider.notifier);
       transactions._merge(result.added);
-      if (result.added.isNotEmpty) await transactions.detectMoneyMoves();
+      if (result.added.isNotEmpty) {
+        await transactions.markReviewed([for (final t in result.added) if (t.aiCategorized) t.id]);
+        await transactions.detectMoneyMoves();
+        unawaited(transactions.autoSort());
+      }
       await ref.read(authControllerProvider.notifier).updateProfile(
             (p) => p.copyWith(smsSyncEnabled: true, lastSmsSyncAt: DateTime.now()),
           );

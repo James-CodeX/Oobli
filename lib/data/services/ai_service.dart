@@ -77,11 +77,8 @@ class AiService {
         .take(40)
         .map((e) => {'merchant': e.key, 'category': e.value.key})
         .toList();
-    for (var i = 0; i < items.length; i += 60) {
-      final res = await _call('/categorize', {
-        'items': items.sublist(i, (i + 60).clamp(0, items.length)),
-        'rules': ruleList,
-      });
+    await _inBatches(items, 60, (chunk) async {
+      final res = await _call('/categorize', {'items': chunk, 'rules': ruleList});
       for (final r in (res['results'] as List? ?? []).cast<Map<String, dynamic>>()) {
         out[r['id'] as String] = AiCategory(
           category: TxCategory.fromKey(r['category'] as String?),
@@ -89,16 +86,42 @@ class AiService {
           confidence: (r['confidence'] as num? ?? 0.5).toDouble(),
         );
       }
-    }
+    });
     return out;
+  }
+
+  /// Sends [items] in chunks of [size], [parallel] requests at a time, so a
+  /// big backlog takes seconds instead of minutes. Chunks that fail are
+  /// skipped (their items simply get no answer) unless every chunk fails.
+  static Future<void> _inBatches<T>(
+    List<T> items,
+    int size,
+    Future<void> Function(List<T> chunk) send, {
+    int parallel = 3,
+  }) async {
+    final chunks = [
+      for (var i = 0; i < items.length; i += size) items.sublist(i, (i + size).clamp(0, items.length)),
+    ];
+    Object? firstError;
+    var failures = 0;
+    for (var i = 0; i < chunks.length; i += parallel) {
+      await Future.wait(chunks.skip(i).take(parallel).map((chunk) async {
+        try {
+          await send(chunk);
+        } catch (e) {
+          failures++;
+          firstError ??= e;
+        }
+      }));
+    }
+    if (chunks.isNotEmpty && failures == chunks.length) throw firstError!;
   }
 
   /// Extracts transactions from SMS the on-device parser could not handle
   /// (bank alerts, unusual M-Pesa formats). Returns raw maps keyed by SMS id.
   Future<Map<String, Map<String, dynamic>>> parseSms(List<SmsMessage> messages) async {
     final out = <String, Map<String, dynamic>>{};
-    for (var i = 0; i < messages.length; i += 40) {
-      final chunk = messages.sublist(i, (i + 40).clamp(0, messages.length));
+    await _inBatches(messages, 40, (chunk) async {
       final res = await _call('/parse-sms', {
         'messages': [
           for (final m in chunk)
@@ -113,7 +136,7 @@ class AiService {
       for (final t in (res['transactions'] as List? ?? []).cast<Map<String, dynamic>>()) {
         if (t['isTransaction'] == true) out[t['id'] as String] = t;
       }
-    }
+    });
     return out;
   }
 

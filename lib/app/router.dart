@@ -87,7 +87,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, s) => _slide(s, ActivityScreen(initialQuery: s.uri.queryParameters['q'])),
       ),
       GoRoute(path: Routes.analytics, pageBuilder: (_, s) => _slide(s, const AnalyticsScreen())),
-      GoRoute(path: Routes.quickSort, pageBuilder: (_, s) => _slide(s, const QuickSortScreen())),
+      GoRoute(
+        path: Routes.quickSort,
+        pageBuilder: (_, s) => _slide(s, QuickSortScreen(focusId: s.uri.queryParameters['focus'])),
+      ),
       GoRoute(path: Routes.settings, pageBuilder: (_, s) => _slide(s, const SettingsScreen())),
     ],
   );

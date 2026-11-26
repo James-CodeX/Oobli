@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/errors/app_failure.dart';
+import '../data/local/local_cache.dart';
 import '../data/models/category.dart';
 import '../data/models/goal.dart';
 import '../data/models/transaction.dart';
@@ -31,8 +34,31 @@ class GoalsController extends AsyncNotifier<List<Goal>> {
   Future<List<Goal>> build() async {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
-    return ref.read(goalRepositoryProvider).fetchAll(userId);
+    final cache = ref.read(localCacheProvider);
+    final name = 'goals_$userId';
+    // Every change is kept on the phone, so goals show offline.
+    listenSelf((_, next) {
+      final goals = next.value;
+      if (goals != null && !next.isLoading) unawaited(cache.write(name, {'v': _encode(goals)}));
+    });
+    return cacheFirst<List<Goal>>(
+      cache: cache,
+      name: name,
+      fetch: () => ref.read(goalRepositoryProvider).fetchAll(userId),
+      encode: _encode,
+      decode: (j) => [
+        for (final g in j as List)
+          Goal.fromRow(g['id'] as String, g['createdAt'] as String, Map<String, dynamic>.from(g as Map)),
+      ],
+      onFresh: (fresh) {
+        if (ref.mounted && ref.read(currentUserIdProvider) == userId) state = AsyncData(fresh);
+      },
+    );
   }
+
+  static List<Map<String, dynamic>> _encode(List<Goal> goals) => [
+        for (final g in goals) {'id': g.id, 'createdAt': g.createdAt.toUtc().toIso8601String(), ...g.toRow('')},
+      ];
 
   Future<Goal> create(Goal goal) async {
     final makePrimary = goal.isPrimary || _current.isEmpty;

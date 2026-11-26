@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../data/local/local_cache.dart';
 import '../data/models/user_profile.dart';
 import '../data/repositories/auth_repository.dart';
 import 'preferences.dart';
+import 'sync_engine.dart';
 
 final authControllerProvider =
     AsyncNotifierProvider<AuthController, UserProfile?>(AuthController.new);
@@ -72,6 +74,8 @@ class AuthController extends AsyncNotifier<UserProfile?> {
     } finally {
       // Always sign out locally, even if the server could not be reached.
       await _store.clearUserData();
+      await ref.read(outboxProvider.notifier).clear();
+      await ref.read(localCacheProvider).clear();
       state = const AsyncData(null);
     }
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/sorting.dart';
+
 import '../models/category.dart';
 import '../models/transaction.dart';
 import '../repositories/transaction_repository.dart';
@@ -53,6 +55,7 @@ class SmsSyncService {
     required DateTime since,
     required Map<String, TxCategory> rules,
     String? ownerName,
+    double? bigAmount,
   }) async {
     final messages = await _inbox.readFinancialMessages(since: since);
     final parsed = <ParsedTransaction>[];
@@ -78,8 +81,12 @@ class SmsSyncService {
       unique.putIfAbsent(transactionFingerprint(p), () => p);
     }
 
-    final transactions =
-        await _categorizer.categorize(unique.values.toList(), rules: rules, ownerName: ownerName);
+    final transactions = await _categorizer.categorize(
+      unique.values.toList(),
+      rules: rules,
+      ownerName: ownerName,
+      bigAmount: bigAmount ?? SortPolicy.minBigAmount,
+    );
     final added = await _repository.createMany(userId, transactions);
     return SyncResult(scanned: messages.length, added: added);
   }

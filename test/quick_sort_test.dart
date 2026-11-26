@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:oobli/core/errors/app_failure.dart';
 import 'package:oobli/data/models/category.dart';
 import 'package:oobli/data/models/transaction.dart';
 import 'package:oobli/state/auth_controller.dart';
+import 'package:oobli/state/sync_engine.dart';
 import 'package:oobli/state/transactions_controller.dart';
 
 import 'support/fakes.dart';
@@ -40,19 +40,23 @@ void main() {
   }
 
   Map<String, Transaction> current() => {for (final t in container.read(transactionsProvider).value!) t.id: t};
+  Future<bool> upload() => container.read(outboxProvider.notifier).flush();
 
   test('files one transaction instantly and saves it in the background', () async {
     await setUpWith([tx('a', 'Pius Kinuthia'), tx('b', 'Pius Kinuthia')]);
     final notifier = container.read(transactionsProvider.notifier);
 
     final pending = notifier.quickCategorize(current()['a']!, TxCategory.transport);
-    // Visible before the write finishes.
+    // Visible before anything is uploaded.
     expect(current()['a']!.category, TxCategory.transport);
     expect(current()['a']!.confirmed, isTrue);
     expect(container.read(unsortedCountProvider), 1);
+    expect(container.read(outboxProvider), 1, reason: 'queued for upload');
 
     expect(await pending, 1);
+    expect(await upload(), isTrue);
     expect(txRepo.writes, {'a': TxCategory.transport});
+    expect(container.read(outboxProvider), 0);
     expect(current()['b']!.confirmed, isFalse, reason: 'remember is off');
     expect(ruleRepo.saved, isEmpty);
   });
@@ -70,6 +74,7 @@ void main() {
         .quickCategorize(current()['a']!, TxCategory.transport, remember: true);
 
     expect(count, 2);
+    await upload();
     expect(txRepo.writes.keys, unorderedEquals(['a', 'b']));
     expect(current()['c']!.category, TxCategory.transfer, reason: 'already confirmed: left alone');
     expect(current()['d']!.confirmed, isFalse, reason: 'money received is not touched');
@@ -77,19 +82,37 @@ void main() {
     expect(ruleRepo.saved, {'Pius Kinuthia': TxCategory.transport});
   });
 
-  test('rolls back when the save fails', () async {
+  test('offline: sorting still works and uploads once the connection is back', () async {
     await setUpWith([tx('a', 'Pius Kinuthia'), tx('b', 'Pius Kinuthia')]);
     txRepo.fail = true;
+    ruleRepo.fail = true;
     final notifier = container.read(transactionsProvider.notifier);
 
-    await expectLater(
-      notifier.quickCategorize(current()['a']!, TxCategory.transport, remember: true),
-      throwsA(isA<AppFailure>()),
-    );
-    expect(current()['a']!.category, TxCategory.transfer);
-    expect(current()['a']!.confirmed, isFalse);
-    expect(current()['b']!.confirmed, isFalse);
-    expect(ruleRepo.saved, isEmpty);
+    expect(await notifier.quickCategorize(current()['a']!, TxCategory.transport, remember: true), 2);
+    expect(current()['a']!.category, TxCategory.transport, reason: 'the change stays on screen');
+    expect(current()['b']!.confirmed, isTrue);
+    expect(await upload(), isFalse, reason: 'nothing could be sent');
+    expect(container.read(netStatusProvider).offline, isTrue);
+    expect(container.read(outboxProvider), 3, reason: 'two transactions and one rule wait');
+
+    txRepo.fail = false;
+    ruleRepo.fail = false;
+    expect(await upload(), isTrue);
+    expect(txRepo.writes, {'a': TxCategory.transport, 'b': TxCategory.transport});
+    expect(ruleRepo.saved, {'Pius Kinuthia': TxCategory.transport});
+    expect(container.read(netStatusProvider).offline, isFalse);
+  });
+
+  test('sorting the same transaction twice offline uploads only the last choice', () async {
+    await setUpWith([tx('a', 'Pius Kinuthia')]);
+    txRepo.fail = true;
+    final notifier = container.read(transactionsProvider.notifier);
+    await notifier.quickCategorize(current()['a']!, TxCategory.transport);
+    await notifier.quickCategorize(current()['a']!, TxCategory.food);
+    expect(container.read(outboxProvider), 1);
+    txRepo.fail = false;
+    await upload();
+    expect(txRepo.writes, {'a': TxCategory.food});
   });
 
   test('remember on money received learns bank withdrawals only for money in', () async {
@@ -102,6 +125,7 @@ void main() {
         .read(transactionsProvider.notifier)
         .quickCategorize(current()['a']!, TxCategory.bankWithdrawal, remember: true);
     expect(count, 2);
+    await upload();
     expect(current()['b']!.category, TxCategory.bankWithdrawal);
     expect(current()['c']!.confirmed, isFalse, reason: 'paying the bank is not touched');
     expect(ruleRepo.saved, {'Equity Bank': TxCategory.bankWithdrawal});

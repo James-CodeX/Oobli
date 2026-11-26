@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/money_moves.dart';
+import '../../domain/sorting.dart';
 import '../models/category.dart';
 import '../models/transaction.dart';
 import 'ai_service.dart';
@@ -27,7 +28,10 @@ String transactionFingerprint(ParsedTransaction p) {
 /// Categorises parsed transactions in three passes:
 /// 1. the user's own corrections (merchant rules) — always win,
 /// 2. message-type and keyword rules — instant and offline,
-/// 3. Gemini (via the oobli-ai function) for everything else.
+/// 3. Gemini (via the oobli-ai function) for everything else, in bulk.
+///
+/// What Oobli is sure of is filed as confirmed; only the rest waits in
+/// Quick sort (see [SortPolicy]).
 class TransactionCategorizer {
   TransactionCategorizer(this._ai);
 
@@ -37,6 +41,7 @@ class TransactionCategorizer {
     List<ParsedTransaction> items, {
     required Map<String, TxCategory> rules,
     String? ownerName,
+    double bigAmount = SortPolicy.minBigAmount,
   }) async {
     final results = List<Transaction?>.filled(items.length, null);
     final pending = <int>[];
@@ -54,7 +59,9 @@ class TransactionCategorizer {
       final known = ruled ?? self ?? p.category ??
           KeywordCategorizer.categorize(merchant: p.merchant, channel: p.channel, direction: p.direction);
       if (known != null) {
-        results[i] = _toTransaction(p, known, confirmed: ruled != null);
+        // Money from a person could be pay, a refund or a loan back: ask.
+        final unsure = ruled == null && self == null && known == TxCategory.income && p.channel == TxChannel.received;
+        results[i] = _toTransaction(p, known, confirmed: !unsure);
       } else {
         pending.add(i);
       }
@@ -87,6 +94,11 @@ class TransactionCategorizer {
                 guess.category,
                 merchant: guess.merchant.isEmpty ? null : guess.merchant,
                 aiCategorized: true,
+                confirmed: SortPolicy.aiIsSure(
+                  guess.category,
+                  guess.confidence,
+                  big: items[i].direction == TxDirection.out && items[i].amount >= bigAmount,
+                ),
               );
       }
     }
