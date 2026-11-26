@@ -13,6 +13,7 @@ import '../../state/insights_controller.dart';
 import '../../state/preferences.dart';
 import '../../state/sync_engine.dart';
 import '../../state/transactions_controller.dart';
+import '../../state/update_controller.dart';
 import '../../ui/widgets/charts.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
@@ -23,6 +24,7 @@ import '../../domain/spending_stats.dart';
 import '../analytics/channel_slices.dart';
 import '../analytics/period_bar.dart';
 import '../assistant/ask_oobli_sheet.dart';
+import '../settings/update_sheet.dart';
 import '../transactions/transaction_editor_sheet.dart';
 import '../transactions/transaction_widgets.dart';
 
@@ -98,6 +100,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
               const SliverToBoxAdapter(child: _ConnectionBanner()),
+              const SliverToBoxAdapter(child: _UpdateBanner()),
               ...txs.when(
                 loading: () => [const SliverToBoxAdapter(child: _LoadingFeed())],
                 error: (e, _) => [
@@ -248,6 +251,64 @@ class _ConnectionBanner extends ConsumerWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// "A new Oobli is ready": opens the update sheet; the cross hides it for
+/// this version.
+class _UpdateBanner extends ConsumerWidget {
+  const _UpdateBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = context.text;
+    final update = ref.watch(updateProvider);
+    final available = update.available;
+    return AnimatedSize(
+      duration: Motion.medium,
+      child: !update.showBanner || available == null
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.sm, Sp.lg, 0),
+              child: Pressable(
+                onTap: () => showUpdateSheet(context),
+                scale: 0.98,
+                semanticLabel: 'Update Oobli to ${available.version}',
+                child: OobliCard(
+                  color: c.secondary.withValues(alpha: 0.12),
+                  borderColor: c.secondary.withValues(alpha: 0.35),
+                  padding: const EdgeInsets.fromLTRB(Sp.md, Sp.sm, Sp.xs, Sp.sm),
+                  child: Row(
+                    children: [
+                      Icon(Icons.system_update_rounded, size: 20, color: c.secondary),
+                      const SizedBox(width: Sp.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Oobli ${available.version} is ready', style: t.labelLarge),
+                            if (available.headline.isNotEmpty)
+                              Text(available.headline,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: t.labelSmall.copyWith(color: c.secondaryText)),
+                          ],
+                        ),
+                      ),
+                      Text('Update', style: t.labelLarge.copyWith(color: c.secondary, fontWeight: FontWeight.w700)),
+                      IconButton(
+                        tooltip: 'Not now',
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.close_rounded, size: 18, color: c.hint),
+                        onPressed: () => ref.read(updateProvider.notifier).dismiss(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

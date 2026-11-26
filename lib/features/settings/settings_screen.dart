@@ -12,11 +12,13 @@ import '../../state/auth_controller.dart';
 import '../../state/goals_controller.dart';
 import '../../state/preferences.dart';
 import '../../state/transactions_controller.dart';
+import '../../state/update_controller.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/tiles.dart';
 import 'settings_sheets.dart';
+import 'update_sheet.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -163,6 +165,53 @@ class SettingsScreen extends ConsumerWidget {
                   title: 'Oobli Wrapped',
                   subtitle: 'Your monthly recap',
                   onTap: () => context.go(Routes.wrapped),
+                ),
+                const SizedBox(height: Sp.lg),
+                const SectionLabel('App updates', padding: EdgeInsets.fromLTRB(Sp.xs, 0, Sp.xs, Sp.sm)),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final update = ref.watch(updateProvider);
+                    final installed = ref.watch(installedAppProvider).value?.version;
+                    final available = update.available;
+                    return _SettingRow(
+                      icon: Icons.system_update_rounded,
+                      tone: available != null ? Tone.secondary : Tone.success,
+                      title: available != null ? 'Update to ${available.version}' : 'Check for updates',
+                      subtitle: [
+                        if (installed != null) 'You have v$installed',
+                        if (update.phase == UpdatePhase.checking)
+                          'Checking…'
+                        else if (available != null)
+                          'Tap to download and install'
+                        else if (update.checked)
+                          'Up to date',
+                      ].join(' · '),
+                      trailing: update.phase == UpdatePhase.checking
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : null,
+                      onTap: update.phase == UpdatePhase.checking
+                          ? null
+                          : () => available != null ? showUpdateSheet(context) : checkForUpdatesNow(context, ref),
+                    );
+                  },
+                ),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final auto = ref.watch(autoUpdateCheckProvider);
+                    return _SettingRow(
+                      icon: Icons.autorenew_rounded,
+                      tone: Tone.info,
+                      title: 'Check automatically',
+                      subtitle: auto
+                          ? 'Oobli looks for a new version when you open it'
+                          : 'Off: use "Check for updates" above',
+                      trailing: Switch.adaptive(
+                        value: auto,
+                        onChanged: (v) => ref.read(autoUpdateCheckProvider.notifier).set(v),
+                      ),
+                      onTap: () => ref.read(autoUpdateCheckProvider.notifier).set(!auto),
+                    );
+                  },
                 ),
                 const SizedBox(height: Sp.lg),
                 const SectionLabel('Support', padding: EdgeInsets.fromLTRB(Sp.xs, 0, Sp.xs, Sp.sm)),

@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'auth_controller.dart';
 import 'sync_engine.dart';
 import 'transactions_controller.dart';
+import 'update_controller.dart';
 
 /// True whenever the phone has a network interface up (Wi-Fi, mobile data…).
 /// Overridable for tests.
@@ -63,7 +64,15 @@ final syncCoordinatorProvider = Provider<void>((ref) {
     wasUp = up;
   });
 
-  final lifecycle = AppLifecycleListener(onResume: () => unawaited(catchUp()));
+  // New versions: looked for on launch and when the app comes back (the
+  // controller honours the Settings switch and checks at most every 3 hours).
+  void checkUpdates() => unawaited(ref.read(updateProvider.notifier).check());
+  Timer.run(checkUpdates);
+
+  final lifecycle = AppLifecycleListener(onResume: () {
+    unawaited(catchUp());
+    checkUpdates();
+  });
 
   final retry = Timer.periodic(const Duration(seconds: 30), (_) {
     if (ref.read(netStatusProvider).offline) unawaited(catchUp(force: true));

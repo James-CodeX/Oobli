@@ -98,6 +98,33 @@ jobs:
             "dist/oobli-${{ steps.version.outputs.name }}-arm64-v8a.apk" \
             "oobli-${{ steps.version.outputs.name }}.apk"
 
+      # The app reads this to offer in-app updates. Uploaded after the APK so
+      # it never points at a file that isn't there yet.
+      - name: Publish the in-app update manifest
+        env:
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          VERSION: ${{ steps.version.outputs.name }}
+          BUILD: ${{ steps.version.outputs.code }}
+        if: env.APPWRITE_API_KEY != ''
+        run: |
+          git log -1 --format=%B "$GITHUB_SHA" | grep -v '^Co-Authored-By:' > dist/notes.txt
+          node -e '
+            const fs = require("fs");
+            const apk = `dist/oobli-${process.env.VERSION}-arm64-v8a.apk`;
+            const sha256 = require("crypto").createHash("sha256").update(fs.readFileSync(apk)).digest("hex");
+            fs.writeFileSync("dist/latest.json", JSON.stringify({
+              version: process.env.VERSION,
+              build: Number(process.env.BUILD),
+              size: fs.statSync(apk).size,
+              sha256,
+              apk: "https://sgp.cloud.appwrite.io/v1/storage/buckets/downloads/files/oobli-android/download?project=6b012dd80037b9146a2b",
+              notes: fs.readFileSync("dist/notes.txt", "utf8").trim(),
+              publishedAt: new Date().toISOString(),
+            }, null, 2));
+          '
+          cat dist/latest.json
+          node .github/scripts/appwrite-upload.mjs downloads oobli-latest dist/latest.json latest.json
+
       - name: Remove signing material
         if: always()
         run: rm -f android/app/upload-keystore.jks android/key.properties

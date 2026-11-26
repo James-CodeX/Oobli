@@ -25,6 +25,8 @@ class LocalStore {
   static const _session = 'session_profile';
   static const _quickSortRemember = 'quick_sort_remember';
   static const _replayOnboarding = 'replay_onboarding';
+  static const _autoUpdateCheck = 'auto_update_check';
+  static const _dismissedUpdate = 'dismissed_update';
 
   bool get seenIntro => _prefs.getBool(_seenIntro) ?? false;
   Future<void> setSeenIntro() => _prefs.setBool(_seenIntro, true);
@@ -40,6 +42,14 @@ class LocalStore {
   /// Play onboarding again on the next launch (cleared once it's finished).
   bool get replayOnboarding => _prefs.getBool(_replayOnboarding) ?? false;
   Future<void> setReplayOnboarding(bool value) => _prefs.setBool(_replayOnboarding, value);
+
+  /// Look for a new Oobli version on launch (Settings switch, on by default).
+  bool get autoUpdateCheck => _prefs.getBool(_autoUpdateCheck) ?? true;
+  Future<void> setAutoUpdateCheck(bool value) => _prefs.setBool(_autoUpdateCheck, value);
+
+  /// The update version whose home-screen banner the user closed.
+  String? get dismissedUpdate => _prefs.getString(_dismissedUpdate);
+  Future<void> setDismissedUpdate(String version) => _prefs.setString(_dismissedUpdate, version);
 
   int get aiCorrections => _prefs.getInt(_aiCorrections) ?? 0;
   Future<void> incrementAiCorrections() => _prefs.setInt(_aiCorrections, aiCorrections + 1);
