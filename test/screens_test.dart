@@ -202,7 +202,9 @@ void main() {
 
   testWidgets('Oobli Plans', (tester) async {
     await render(tester, const PlansScreen(), 'plans', height: 1450);
-    expect(find.textContaining('Draft Plan'), findsOneWidget);
+    expect(find.text('Draft'), findsOneWidget);
+    expect(find.text('Where the money goes'), findsOneWidget);
+    expect(find.text('Anticipated Income'), findsNothing, reason: 'the income form only shows before there is a plan');
     expect(find.text('Fixed Needs'), findsOneWidget);
     expect(find.text('Activate Plan'), findsOneWidget);
   });

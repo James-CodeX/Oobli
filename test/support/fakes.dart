@@ -141,8 +141,12 @@ class FakeTransactions extends TransactionsController {
 }
 
 class FakeGoals extends GoalsController {
+  FakeGoals([this.goals]);
+
+  final List<Goal>? goals;
+
   @override
-  Future<List<Goal>> build() async => fixtureGoals;
+  Future<List<Goal>> build() async => goals ?? fixtureGoals;
 }
 
 class FakePlan extends PlanController {
@@ -258,6 +262,7 @@ Future<List<Override>> overrides({
   Map<String, Object> prefs = const {},
   bool signedIn = true,
   AiService? ai,
+  List<Goal>? goals,
 }) async {
   SharedPreferences.setMockInitialValues(prefs);
   final store = await SharedPreferences.getInstance();
@@ -267,7 +272,7 @@ Future<List<Override>> overrides({
     appVersionProvider.overrideWith((ref) async => '1.1.2'),
     authControllerProvider.overrideWith(signedIn ? FakeAuth.new : FakeSignedOut.new),
     transactionsProvider.overrideWith(() => FakeTransactions(txs)),
-    goalsProvider.overrideWith(FakeGoals.new),
+    goalsProvider.overrideWith(() => FakeGoals(goals)),
     planProvider.overrideWith(() => FakePlan(plan)),
     merchantRulesProvider.overrideWith(FakeRules.new),
     transactionRepositoryProvider.overrideWithValue(txRepo ?? FakeTxRepo()),

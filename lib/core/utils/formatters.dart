@@ -35,6 +35,8 @@ abstract final class Fmt {
   static String dayMonth(DateTime d) => DateFormat('dd MMM').format(d).toUpperCase();
   static String monthName(DateTime d) => DateFormat('MMMM').format(d);
   static String monthYear(DateTime d) => DateFormat('MMMM yyyy').format(d);
+  static String monthShort(DateTime d) => DateFormat('MMM').format(d);
+  static String monthShortYear(DateTime d) => DateFormat('MMM yyyy').format(d);
   static String monthKey(DateTime d) => DateFormat('yyyy-MM').format(d);
   static String weekdayName(DateTime d) => DateFormat('EEEE').format(d);
   static String weekdayLetter(DateTime d) => DateFormat('E').format(d).substring(0, 1);

@@ -18,7 +18,9 @@ import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/progress.dart';
 import '../../ui/widgets/tiles.dart';
 import '../assistant/ask_oobli_sheet.dart';
+import '../transactions/spend_history_screen.dart';
 import 'channel_slices.dart';
+import 'period_bar.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -28,25 +30,25 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
 }
 
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
-  FlowRange range = FlowRange.week;
+  Period? _period;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
     final stats = ref.watch(statsProvider);
-    final period = stats.rangeFor(range);
+    final period = _period ?? Period.week(stats.now);
     final channels = stats.byChannel(period.start, period.end);
     final categories = stats.byCategory(period.start, period.end);
     final periodTotal = channels.values.fold<double>(0, (s, v) => s + v);
+    final label = period.label(stats.now);
 
     return Scaffold(
-      body: ListView(
-        padding: EdgeInsets.zero,
+      body: Column(
         children: [
           Container(
             color: c.surface,
-            padding: EdgeInsets.fromLTRB(Sp.lg, MediaQuery.paddingOf(context).top + Sp.md, Sp.lg, Sp.lg),
+            padding: EdgeInsets.fromLTRB(Sp.lg, MediaQuery.paddingOf(context).top + Sp.md, Sp.lg, Sp.md),
             child: Row(
               children: [
                 OobliIconButton(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => context.pop()),
@@ -74,133 +76,136 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(Sp.lg),
-            child: OobliCard(
-              shadow: true,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Text('Spending Flow', style: t.titleMedium),
-                      const SizedBox(width: Sp.md),
-                      Expanded(
-                        child: _RangeDropdown(
-                          value: range,
-                          onChanged: (r) => setState(() => range = r),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: Sp.lg),
-                  FlowLineChart(points: stats.series(range)),
-                  const SizedBox(height: Sp.lg),
-                  const Divider(),
-                  const SizedBox(height: Sp.lg),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: Sp.sm,
-                    crossAxisSpacing: Sp.sm,
-                    childAspectRatio: 2.7,
-                    children: [
-                      for (final (label, channel, tone) in const [
-                        ('Paybill', TxChannel.paybill, Tone.primary),
-                        ('Tills', TxChannel.till, Tone.secondary),
-                        ('Pochi', TxChannel.pochi, Tone.accent),
-                        ('Send Money', TxChannel.send, Tone.warning),
-                      ])
-                        _ChannelChip(
-                          label: label,
-                          value: channels[channel] ?? 0,
-                          share: periodTotal <= 0 ? 0 : (channels[channel] ?? 0) / periodTotal,
-                          tone: tone,
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          // One choice drives both charts, and stays in view while scrolling.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(bottom: Sp.md),
+            decoration: BoxDecoration(color: c.surface, border: Border(bottom: BorderSide(color: c.divider))),
+            child: PeriodBar(value: period, onChanged: (p) => setState(() => _period = p)),
           ),
-          const SizedBox(height: Sp.lg),
-          const _SuggestionPanel(),
-          Padding(
-            padding: const EdgeInsets.all(Sp.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
               children: [
-                const SizedBox(height: Sp.md),
-                Text('Distribution', style: t.titleMedium),
-                const SizedBox(height: Sp.md),
-                OobliCard(
-                  radius: Rad.lg,
-                  child: channels.isEmpty
-                      ? const EmptyState(
-                          title: 'Nothing here yet',
-                          message: 'Spend data for this period will appear here.',
-                        )
-                      : Column(
+                Padding(
+                  padding: const EdgeInsets.all(Sp.lg),
+                  child: OobliCard(
+                    shadow: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            DonutChart(
-                              size: 132,
-                              slices: channelSlices(context.colors, channels),
-                              centerValue: Fmt.compactKes(periodTotal),
-                              centerLabel: range.label.toLowerCase(),
+                            Expanded(child: Text('Spending Flow', style: t.titleMedium)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(Fmt.kes(periodTotal), style: t.titleMedium.copyWith(fontWeight: FontWeight.w800)),
+                                Text(label, style: t.labelSmall.copyWith(color: c.secondaryText)),
+                              ],
                             ),
-                            const SizedBox(height: Sp.lg),
-                            for (final (i, e) in categories.entries.take(3).indexed) ...[
-                              if (i > 0) const Divider(),
-                              _CategoryRow(category: e.key, amount: e.value),
-                            ],
                           ],
                         ),
+                        const SizedBox(height: Sp.lg),
+                        FlowLineChart(points: stats.seriesFor(period)),
+                        const SizedBox(height: Sp.lg),
+                        const Divider(),
+                        const SizedBox(height: Sp.lg),
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          mainAxisSpacing: Sp.sm,
+                          crossAxisSpacing: Sp.sm,
+                          childAspectRatio: 2.7,
+                          children: [
+                            for (final (label, channel, tone) in const [
+                              ('Paybill', TxChannel.paybill, Tone.primary),
+                              ('Tills', TxChannel.till, Tone.secondary),
+                              ('Pochi', TxChannel.pochi, Tone.accent),
+                              ('Send Money', TxChannel.send, Tone.warning),
+                            ])
+                              _ChannelChip(
+                                label: label,
+                                value: channels[channel] ?? 0,
+                                share: periodTotal <= 0 ? 0 : (channels[channel] ?? 0) / periodTotal,
+                                tone: tone,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: Sp.xl),
-                OobliButton(
-                  label: 'Generate AI Spending Plan',
-                  icon: Icons.auto_graph_rounded,
-                  fullWidth: true,
-                  onPressed: () => context.go(Routes.plans),
+                const _SuggestionPanel(),
+                Padding(
+                  padding: const EdgeInsets.all(Sp.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: Sp.sm),
+                      Row(
+                        children: [
+                          Expanded(child: Text('Distribution', style: t.titleMedium)),
+                          Text(label, style: t.labelMedium.copyWith(color: c.secondaryText)),
+                        ],
+                      ),
+                      const SizedBox(height: Sp.md),
+                      OobliCard(
+                        radius: Rad.lg,
+                        child: channels.isEmpty
+                            ? EmptyState(
+                                title: 'Nothing spent',
+                                message: 'No spending ${period.phrase(stats.now)}.',
+                              )
+                            : Column(
+                                children: [
+                                  DonutChart(
+                                    size: 132,
+                                    slices: channelSlices(context.colors, channels),
+                                    centerValue: Fmt.compactKes(periodTotal),
+                                    centerLabel: label.toLowerCase(),
+                                  ),
+                                  const SizedBox(height: Sp.lg),
+                                  for (final (i, e) in categories.entries.indexed) ...[
+                                    if (i > 0) const Divider(height: 1),
+                                    _CategoryRow(
+                                      category: e.key,
+                                      amount: e.value,
+                                      share: periodTotal <= 0 ? 0 : e.value / periodTotal,
+                                      onTap: () => showSpendHistory(
+                                        context,
+                                        title: e.key.label,
+                                        period: label,
+                                        icon: e.key.icon,
+                                        tone: e.key.tone,
+                                        include: (tx) =>
+                                            tx.isSpend &&
+                                            tx.category == e.key &&
+                                            !tx.occurredAt.isBefore(period.start) &&
+                                            tx.occurredAt.isBefore(period.end),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                      ),
+                      const SizedBox(height: Sp.xl),
+                      OobliButton(
+                        label: 'Generate AI Spending Plan',
+                        icon: Icons.auto_graph_rounded,
+                        fullWidth: true,
+                        onPressed: () => context.go(Routes.plans),
+                      ),
+                      SizedBox(height: MediaQuery.paddingOf(context).bottom + Sp.md),
+                    ],
+                  ),
                 ),
-                SizedBox(height: MediaQuery.paddingOf(context).bottom + Sp.md),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RangeDropdown extends StatelessWidget {
-  const _RangeDropdown({required this.value, required this.onChanged});
-
-  final FlowRange value;
-  final ValueChanged<FlowRange> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: Sp.md),
-      decoration: BoxDecoration(
-        color: c.secondaryBackground,
-        borderRadius: Rad.all(Rad.md),
-        border: Border.all(color: c.outline),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<FlowRange>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: c.surface,
-          borderRadius: Rad.all(Rad.md),
-          icon: Icon(Icons.arrow_drop_down_rounded, color: c.secondaryText),
-          style: context.text.bodyLarge.copyWith(color: c.primaryText),
-          items: [for (final r in FlowRange.values) DropdownMenuItem(value: r, child: Text(r.label))],
-          onChanged: (r) => r == null ? null : onChanged(r),
-        ),
       ),
     );
   }
@@ -248,25 +253,32 @@ class _ChannelChip extends StatelessWidget {
 }
 
 class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({required this.category, required this.amount});
+  const _CategoryRow({required this.category, required this.amount, required this.share, required this.onTap});
 
   final TxCategory category;
   final double amount;
+  final double share;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final t = context.text;
     return Pressable(
-      onTap: () => context.push('${Routes.activity}?q=${Uri.encodeComponent(category.label)}'),
+      onTap: onTap,
       scale: 0.98,
+      semanticLabel: '${category.label}, ${Fmt.kes(amount)}',
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: Sp.md),
         child: Row(
           children: [
-            Icon(category.icon, color: context.colors.onSurface),
+            ToneTile(icon: category.icon, tone: category.tone, size: 32, soft: true),
             const SizedBox(width: Sp.md),
-            Expanded(child: Text(category.label, style: t.bodyLarge)),
+            Expanded(child: Text(category.label, style: t.bodyLarge, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Text('${(share * 100).round()}%', style: t.labelMedium.copyWith(color: c.secondaryText)),
+            const SizedBox(width: Sp.md),
             Text(Fmt.kes(amount), style: t.bodyLarge.copyWith(fontWeight: FontWeight.w700)),
+            Icon(Icons.chevron_right_rounded, size: 18, color: c.hint),
           ],
         ),
       ),

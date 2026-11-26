@@ -21,6 +21,7 @@ import '../../ui/widgets/tiles.dart';
 import '../../domain/bills.dart';
 import '../../domain/spending_stats.dart';
 import '../analytics/channel_slices.dart';
+import '../analytics/period_bar.dart';
 import '../assistant/ask_oobli_sheet.dart';
 import '../transactions/transaction_editor_sheet.dart';
 import '../transactions/transaction_widgets.dart';
@@ -535,18 +536,25 @@ class _BillsCard extends ConsumerWidget {
 }
 
 /// This week's spend by channel with a shortcut to the full Analytics page.
-class _DistributionCard extends ConsumerWidget {
+class _DistributionCard extends ConsumerStatefulWidget {
   const _DistributionCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DistributionCard> createState() => _DistributionCardState();
+}
+
+class _DistributionCardState extends ConsumerState<_DistributionCard> {
+  Period? _period;
+
+  @override
+  Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
     final stats = ref.watch(statsProvider);
-    final week = stats.rangeFor(FlowRange.week);
-    final channels = stats.byChannel(week.start, week.end);
+    final period = _period ?? Period.week(stats.now);
+    final channels = stats.byChannel(period.start, period.end);
     final total = channels.values.fold<double>(0, (s, v) => s + v);
-    if (total <= 0) return const SizedBox.shrink();
+    final label = period.label(stats.now);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(Sp.lg, 0, Sp.lg, Sp.lg),
@@ -554,18 +562,36 @@ class _DistributionCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: Text('Where it went', style: t.titleMedium)),
-                Text('This week', style: t.labelMedium.copyWith(color: c.secondaryText)),
-              ],
-            ),
+            Text('Where it went', style: t.titleMedium),
             const SizedBox(height: Sp.md),
-            DonutChart(
-              size: 132,
-              slices: channelSlices(c, channels),
-              centerValue: Fmt.compactKes(total),
-              centerLabel: 'this week',
+            PeriodBar(
+              value: period,
+              dense: true,
+              options: const [PeriodKind.today, PeriodKind.yesterday, PeriodKind.week],
+              onChanged: (p) => setState(() => _period = p),
+            ),
+            const SizedBox(height: Sp.lg),
+            AnimatedSwitcher(
+              duration: Motion.medium,
+              child: total <= 0
+                  ? SizedBox(
+                      key: ValueKey('empty-$label'),
+                      width: double.infinity,
+                      height: 132,
+                      child: Center(
+                        child: Text(
+                          'Nothing spent ${period.phrase(stats.now)}',
+                          style: t.bodyMedium.copyWith(color: c.secondaryText),
+                        ),
+                      ),
+                    )
+                  : DonutChart(
+                      key: ValueKey(label),
+                      size: 132,
+                      slices: channelSlices(c, channels),
+                      centerValue: Fmt.compactKes(total),
+                      centerLabel: label.toLowerCase(),
+                    ),
             ),
             const SizedBox(height: Sp.md),
             const Divider(),

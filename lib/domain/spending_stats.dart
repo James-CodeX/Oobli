@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import '../core/utils/formatters.dart';
@@ -7,22 +9,84 @@ import '../data/models/plan.dart';
 import '../data/models/transaction.dart';
 import 'bills.dart';
 
-enum FlowRange {
-  week('This Week'),
-  month('Last Month'),
-  year('Yearly');
+enum PeriodKind { today, yesterday, week, month, sixMonths, year }
 
-  const FlowRange(this.label);
+/// A span of time the charts can show: today, yesterday, the last 7 days, a
+/// calendar month, the last 6 months or a calendar year. [end] is exclusive.
+@immutable
+class Period {
+  const Period._(this.kind, this.start, this.end);
 
-  final String label;
+  final PeriodKind kind;
+  final DateTime start;
+  final DateTime end;
+
+  factory Period.today(DateTime now) {
+    final d = now.dateOnly;
+    return Period._(PeriodKind.today, d, d.add(const Duration(days: 1)));
+  }
+
+  factory Period.yesterday(DateTime now) {
+    final d = now.dateOnly;
+    return Period._(PeriodKind.yesterday, d.subtract(const Duration(days: 1)), d);
+  }
+
+  /// The last 7 days, today included.
+  factory Period.week(DateTime now) {
+    final end = now.dateOnly.add(const Duration(days: 1));
+    return Period._(PeriodKind.week, end.subtract(const Duration(days: 7)), end);
+  }
+
+  factory Period.month(DateTime month) {
+    final start = month.monthStart;
+    return Period._(PeriodKind.month, start, DateTime(start.year, start.month + 1));
+  }
+
+  /// This month and the five before it.
+  factory Period.sixMonths(DateTime now) {
+    final m = now.monthStart;
+    return Period._(PeriodKind.sixMonths, DateTime(m.year, m.month - 5), DateTime(m.year, m.month + 1));
+  }
+
+  factory Period.year(int year) => Period._(PeriodKind.year, DateTime(year), DateTime(year + 1));
+
+  /// Short name for buttons and headings: "Today", "This week", "November",
+  /// "Oct 2025", "6 months", "2026".
+  String label(DateTime now) => switch (kind) {
+        PeriodKind.today => 'Today',
+        PeriodKind.yesterday => 'Yesterday',
+        PeriodKind.week => 'This week',
+        PeriodKind.month => start.year == now.year ? Fmt.monthName(start) : Fmt.monthShortYear(start),
+        PeriodKind.sixMonths => '6 months',
+        PeriodKind.year => '${start.year}',
+      };
+
+  /// Fits after an amount: "KES 4,000 today", "… in November".
+  String phrase(DateTime now) => switch (kind) {
+        PeriodKind.today => 'today',
+        PeriodKind.yesterday => 'yesterday',
+        PeriodKind.week => 'this week',
+        PeriodKind.sixMonths => 'in 6 months',
+        _ => 'in ${label(now)}',
+      };
+
+  @override
+  bool operator ==(Object other) => other is Period && other.kind == kind && other.start == start;
+
+  @override
+  int get hashCode => Object.hash(kind, start);
 }
 
 @immutable
 class SeriesPoint {
-  const SeriesPoint(this.label, this.value);
+  const SeriesPoint(this.label, this.value, {this.tip});
 
+  /// Axis label (may be empty to keep a crowded axis readable).
   final String label;
   final double value;
+
+  /// Tooltip title; defaults to [label].
+  final String? tip;
 }
 
 @immutable
@@ -99,42 +163,57 @@ class SpendingStats {
     return (spentToday - last) / last;
   }
 
-  ({DateTime start, DateTime end}) rangeFor(FlowRange range) {
-    final end = today.add(const Duration(days: 1));
-    return switch (range) {
-      FlowRange.week => (start: end.subtract(const Duration(days: 7)), end: end),
-      FlowRange.month => (start: end.subtract(const Duration(days: 28)), end: end),
-      FlowRange.year => (start: DateTime(today.year - 1, today.month + 1), end: end),
-    };
+  /// Spend over [p], as points for the flow chart (always at least two).
+  List<SeriesPoint> seriesFor(Period p) {
+    final tomorrow = today.add(const Duration(days: 1));
+    final points = <SeriesPoint>[];
+    switch (p.kind) {
+      case PeriodKind.today:
+      case PeriodKind.yesterday:
+        // Three-hour blocks; today stops at the current block.
+        const names = ['12a', '3a', '6a', '9a', '12p', '3p', '6p', '9p'];
+        const tips = ['Midnight – 3 AM', '3 – 6 AM', '6 – 9 AM', '9 AM – 12 PM', '12 – 3 PM', '3 – 6 PM', '6 – 9 PM',
+          '9 PM – midnight'];
+        final last = p.kind == PeriodKind.today ? now.hour ~/ 3 : 7;
+        for (var i = 0; i <= math.max(last, 1); i++) {
+          final s = p.start.add(Duration(hours: i * 3));
+          points.add(SeriesPoint(names[i], spentBetween(s, s.add(const Duration(hours: 3))), tip: tips[i]));
+        }
+      case PeriodKind.week:
+        for (var d = p.start; d.isBefore(p.end); d = DateTime(d.year, d.month, d.day + 1)) {
+          points.add(SeriesPoint(Fmt.weekdayLetter(d), spentOn(d), tip: '${Fmt.weekdayName(d)}, ${Fmt.shortDate(d)}'));
+        }
+      case PeriodKind.month:
+        final end = p.end.isAfter(tomorrow) ? tomorrow : p.end;
+        for (var d = p.start; d.isBefore(end) || points.length < 2; d = DateTime(d.year, d.month, d.day + 1)) {
+          final label = const {1, 8, 15, 22, 29}.contains(d.day) ? '${d.day}' : '';
+          points.add(SeriesPoint(label, spentOn(d), tip: Fmt.shortDate(d)));
+        }
+      case PeriodKind.sixMonths:
+      case PeriodKind.year:
+        for (var m = p.start; m.isBefore(p.end) && (!m.isAfter(today) || points.length < 2);
+            m = DateTime(m.year, m.month + 1)) {
+          final label = p.kind == PeriodKind.year ? Fmt.monthName(m).substring(0, 1) : Fmt.monthShort(m);
+          points.add(SeriesPoint(label, spentBetween(m, DateTime(m.year, m.month + 1)), tip: Fmt.monthYear(m)));
+        }
+    }
+    return points;
   }
 
-  List<SeriesPoint> series(FlowRange range) {
-    switch (range) {
-      case FlowRange.week:
-        return lastDays(7);
-      case FlowRange.month:
-        final end = today.add(const Duration(days: 1));
-        return [
-          for (var w = 3; w >= 0; w--)
-            SeriesPoint(
-              'W${4 - w}',
-              spentBetween(
-                end.subtract(Duration(days: 7 * (w + 1))),
-                end.subtract(Duration(days: 7 * w)),
-              ),
-            ),
-        ];
-      case FlowRange.year:
-        return [
-          for (var m = 11; m >= 0; m--)
-            () {
-              final start = DateTime(today.year, today.month - m);
-              final end = DateTime(today.year, today.month - m + 1);
-              return SeriesPoint(Fmt.monthName(start).substring(0, 1), spentBetween(start, end));
-            }(),
-        ];
+  /// Months that have any spending, newest first (for the month picker).
+  List<({DateTime month, double total})> spendingMonths() {
+    final totals = <DateTime, double>{};
+    for (final t in all) {
+      if (t.isSpend) totals.update(t.occurredAt.monthStart, (v) => v + t.amount, ifAbsent: () => t.amount);
     }
+    totals.putIfAbsent(today.monthStart, () => 0);
+    final months = totals.keys.toList()..sort((a, b) => b.compareTo(a));
+    return [for (final m in months) (month: m, total: totals[m]!)];
   }
+
+  /// Years that have any spending, newest first.
+  List<int> spendingYears() =>
+      {today.year, for (final t in all) if (t.isSpend) t.occurredAt.year}.toList()..sort((a, b) => b - a);
 
   Map<TxCategory, double> byCategory(DateTime start, DateTime end) {
     final out = <TxCategory, double>{};

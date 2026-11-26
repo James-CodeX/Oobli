@@ -11,6 +11,9 @@ import '../data/repositories/goal_repository.dart';
 import 'auth_controller.dart';
 import 'transactions_controller.dart';
 
+/// How money added to a goal is labelled in the transaction list.
+String goalDepositMerchant(Goal goal) => 'Goal · ${goal.title}';
+
 final goalsProvider = AsyncNotifierProvider<GoalsController, List<Goal>>(GoalsController.new);
 
 final primaryGoalProvider = Provider<Goal?>((ref) {
@@ -90,7 +93,7 @@ class GoalsController extends AsyncNotifier<List<Goal>> {
           fingerprint: 'goal-${goal.id}-${DateTime.now().microsecondsSinceEpoch}',
           amount: amount,
           direction: TxDirection.out,
-          merchant: 'Goal · ${goal.title}',
+          merchant: goalDepositMerchant(goal),
           category: TxCategory.savings,
           channel: TxChannel.other,
           source: TxSource.manual,

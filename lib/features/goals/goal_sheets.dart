@@ -7,7 +7,9 @@ import '../../core/theme/oobli_colors.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/goal.dart';
+import '../../data/models/category.dart';
 import '../../state/goals_controller.dart';
+import '../../state/transactions_controller.dart';
 import '../../ui/widgets/choice_card.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/mascot.dart';
@@ -72,6 +74,11 @@ class _GoalDetailsSheetState extends ConsumerState<_GoalDetailsSheet> {
     final goals = ref.watch(goalsProvider).value ?? const [];
     final goal = goals.where((g) => g.id == widget.goalId).firstOrNull;
     if (goal == null) return const SizedBox(height: 120);
+    final deposits = ref
+        .watch(statsProvider)
+        .all
+        .where((t) => t.merchant == goalDepositMerchant(goal) && t.category == TxCategory.savings)
+        .toList();
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -104,48 +111,85 @@ class _GoalDetailsSheetState extends ConsumerState<_GoalDetailsSheet> {
             const SizedBox(height: Sp.sm),
             Text('${Fmt.ksh(goal.saved)} of ${Fmt.ksh(goal.target)} · ${Fmt.percent(goal.progress)}',
                 style: t.labelLarge.copyWith(color: c.secondaryText)),
+            if (!goal.isComplete) ...[
+              const SizedBox(height: Sp.lg),
+              OobliTextField(
+                label: 'Add money',
+                hint: '1,000',
+                icon: Icons.add_card_rounded,
+                controller: _amount,
+                keyboardType: TextInputType.number,
+                inputFormatters: [ThousandsFormatter()],
+                fillColor: c.surface,
+              ),
+              const SizedBox(height: Sp.sm),
+              Wrap(
+                spacing: Sp.sm,
+                children: [
+                  for (final v in const [500, 1000, 5000])
+                    PillChoice(
+                      label: '+${Fmt.number(v)}',
+                      selected: false,
+                      onTap: () => setState(() => _amount.text = Fmt.number(v)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: Sp.md),
+              OobliButton(
+                label: 'Add to goal',
+                fullWidth: true,
+                loading: _busy,
+                onPressed: () {
+                  final amount = ThousandsFormatter.parse(_amount.text) ?? 0;
+                  if (amount <= 0) {
+                    HapticFeedback.heavyImpact();
+                    return;
+                  }
+                  HapticFeedback.mediumImpact();
+                  _run(
+                    () => ref.read(goalsProvider.notifier).deposit(goal, amount),
+                    success: goal.saved + amount >= goal.target
+                        ? 'Goal reached! Oobli is so proud of you!'
+                        : '${Fmt.ksh(amount)} added to ${goal.title}',
+                    close: true,
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: Sp.lg),
-            OobliTextField(
-              label: 'Add money',
-              hint: '1,000',
-              icon: Icons.add_card_rounded,
-              controller: _amount,
-              keyboardType: TextInputType.number,
-              inputFormatters: [ThousandsFormatter()],
-              fillColor: c.surface,
-            ),
-            const SizedBox(height: Sp.sm),
-            Wrap(
-              spacing: Sp.sm,
-              children: [
-                for (final v in const [500, 1000, 5000])
-                  PillChoice(
-                    label: '+${Fmt.number(v)}',
-                    selected: false,
-                    onTap: () => setState(() => _amount.text = Fmt.number(v)),
+            Text('History', style: t.titleMedium),
+            const SizedBox(height: Sp.xs),
+            for (final d in deposits)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Sp.sm),
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline_rounded, size: 18, color: c.tone(goal.tone)),
+                    const SizedBox(width: Sp.sm),
+                    Expanded(
+                      child: Text(
+                        '${Fmt.shortDate(d.occurredAt)}, ${d.occurredAt.year} · ${Fmt.time12(d.occurredAt)}',
+                        style: t.bodyMedium,
+                      ),
+                    ),
+                    Text('+${Fmt.ksh(d.amount)}', style: t.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: Sp.sm),
+              child: Row(
+                children: [
+                  Icon(Icons.flag_rounded, size: 18, color: c.secondaryText),
+                  const SizedBox(width: Sp.sm),
+                  Expanded(
+                    child: Text(
+                      'Started ${Fmt.shortDate(goal.createdAt)}, ${goal.createdAt.year}',
+                      style: t.bodyMedium.copyWith(color: c.secondaryText),
+                    ),
                   ),
-              ],
-            ),
-            const SizedBox(height: Sp.md),
-            OobliButton(
-              label: 'Add to goal',
-              fullWidth: true,
-              loading: _busy,
-              onPressed: () {
-                final amount = ThousandsFormatter.parse(_amount.text) ?? 0;
-                if (amount <= 0) {
-                  HapticFeedback.heavyImpact();
-                  return;
-                }
-                HapticFeedback.mediumImpact();
-                _run(
-                  () => ref.read(goalsProvider.notifier).deposit(goal, amount),
-                  success: goal.saved + amount >= goal.target
-                      ? 'Goal reached! Oobli is so proud of you!'
-                      : '${Fmt.ksh(amount)} added to ${goal.title}',
-                  close: true,
-                );
-              },
+                ],
+              ),
             ),
             const SizedBox(height: Sp.lg),
             Row(

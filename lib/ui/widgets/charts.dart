@@ -424,7 +424,7 @@ class _LinePainter extends CustomPainter {
       canvas.drawCircle(p, 7, Paint()..color = surface);
       canvas.drawCircle(p, 5, Paint()..color = line);
 
-      final title = _text(points[s].label, bubbleTitle);
+      final title = _text(points[s].tip ?? points[s].label, bubbleTitle);
       final value = _text(Fmt.kes(points[s].value), bubbleValue);
       final bw = math.max(title.width, value.width) + 16;
       final bh = title.height + value.height + 8;

@@ -15,7 +15,6 @@ import '../../state/insights_controller.dart';
 import '../../state/transactions_controller.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/mascot.dart';
-import '../../ui/widgets/oobli_button.dart';
 import '../../ui/widgets/pressable.dart';
 import '../../ui/widgets/progress.dart';
 import '../../ui/widgets/tiles.dart';
@@ -32,7 +31,20 @@ class GoalsScreen extends ConsumerWidget {
     final primary = ref.watch(primaryGoalProvider);
     final name = ref.watch(authControllerProvider).value?.name ?? '';
 
+    final hasGoals = goalsAsync.value?.isNotEmpty ?? false;
     return Scaffold(
+      floatingActionButton: goalsAsync.hasValue
+          ? FloatingActionButton.extended(
+              heroTag: 'new-goal',
+              onPressed: () => showGoalEditor(context),
+              backgroundColor: c.primary,
+              foregroundColor: c.onPrimary,
+              elevation: 2,
+              icon: const Icon(Icons.add_rounded),
+              label: Text(hasGoals ? 'New goal' : 'Create a goal',
+                  style: t.labelLarge.copyWith(color: c.onPrimary, fontWeight: FontWeight.w700)),
+            )
+          : null,
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -66,23 +78,17 @@ class GoalsScreen extends ConsumerWidget {
             ),
             error: (e, _) => ErrorRetry(error: e, onRetry: () => ref.invalidate(goalsProvider)),
             data: (goals) => goals.isEmpty || primary == null
-                ? Padding(
-                    padding: const EdgeInsets.only(top: Sp.xxl),
+                ? const Padding(
+                    padding: EdgeInsets.only(top: Sp.xxl),
                     child: EmptyState(
                       title: 'Dream it, then save it',
                       message: 'Create a goal and Oobli will break it into milestones and cheer you on.',
                       mood: MascotMood.happy,
-                      action: OobliButton(
-                        label: 'Create New Goal',
-                        icon: Icons.add_rounded,
-                        size: OobliButtonSize.medium,
-                        onPressed: () => showGoalEditor(context),
-                      ),
                     ),
                   )
-                : _GoalsBody(primary: primary, others: goals.where((g) => g.id != primary.id).toList()),
+                : _GoalsBody(goals: goals, primary: primary),
           ),
-          const SizedBox(height: Sp.xxl),
+          const SizedBox(height: 96), // clear of the "New goal" button
         ],
       ),
     );
@@ -103,57 +109,91 @@ class GoalsScreen extends ConsumerWidget {
 }
 
 class _GoalsBody extends ConsumerWidget {
-  const _GoalsBody({required this.primary, required this.others});
+  const _GoalsBody({required this.goals, required this.primary});
 
+  final List<Goal> goals;
   final Goal primary;
-  final List<Goal> others;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final t = context.text;
+    // The goal in the spotlight is the primary one, unless it's already
+    // reached: then the next goal still in progress.
+    final active = goals.where((g) => !g.isComplete).toList();
+    final featured = !primary.isComplete ? primary : active.firstOrNull;
+    final others = active.where((g) => g.id != featured?.id).toList();
+    final done = goals.where((g) => g.isComplete).toList()
+      ..sort((a, b) => (b.isPrimary ? 1 : 0).compareTo(a.isPrimary ? 1 : 0));
     final note = ref.watch(currentInsightsProvider).goalNote;
-    final projection = note.isNotEmpty ? note : LocalInsights.goalProjection(primary, ref.watch(statsProvider));
+    final stats = ref.watch(statsProvider);
 
     return Padding(
       padding: const EdgeInsets.all(Sp.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Primary Goal', style: t.labelLarge.copyWith(fontWeight: FontWeight.w700, color: c.onBackground)),
-          const SizedBox(height: Sp.lg),
-          _PrimaryGoalCard(goal: primary),
-          const SizedBox(height: Sp.lg),
-          Container(
-            padding: const EdgeInsets.all(Sp.md),
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.06),
-              borderRadius: Rad.all(Rad.lg),
-              border: Border.all(color: c.primary.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Oobli says...', style: t.titleSmall.copyWith(fontWeight: FontWeight.w800, color: c.onSurface)),
-                const SizedBox(width: Sp.md),
-                Expanded(child: Text(projection, style: t.bodySmall.copyWith(color: c.primaryText))),
-              ],
-            ),
-          ),
-          const SizedBox(height: Sp.lg),
-          Text('Milestones', style: t.titleLarge),
-          const SizedBox(height: Sp.md),
-          OobliCard(
-            radius: Rad.lg,
-            child: Column(
-              children: [
-                for (final (i, m) in LocalInsights.milestones(primary).indexed) ...[
-                  if (i > 0) const SizedBox(height: Sp.lg),
-                  _MilestoneStep(milestone: m),
+          if (featured != null) ...[
+            Text(featured.isPrimary ? 'Primary Goal' : 'In progress',
+                style: t.labelLarge.copyWith(fontWeight: FontWeight.w700, color: c.onBackground)),
+            const SizedBox(height: Sp.lg),
+            _PrimaryGoalCard(goal: featured),
+            const SizedBox(height: Sp.lg),
+            Container(
+              padding: const EdgeInsets.all(Sp.md),
+              decoration: BoxDecoration(
+                color: c.primary.withValues(alpha: 0.06),
+                borderRadius: Rad.all(Rad.lg),
+                border: Border.all(color: c.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Oobli says...', style: t.titleSmall.copyWith(fontWeight: FontWeight.w800, color: c.onSurface)),
+                  const SizedBox(width: Sp.md),
+                  Expanded(
+                    child: Text(
+                      featured.id == primary.id && note.isNotEmpty ? note : LocalInsights.goalProjection(featured, stats),
+                      style: t.bodySmall.copyWith(color: c.primaryText),
+                    ),
+                  ),
                 ],
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: Sp.lg),
+            Text('Milestones', style: t.titleLarge),
+            const SizedBox(height: Sp.md),
+            OobliCard(
+              radius: Rad.lg,
+              child: Column(
+                children: [
+                  for (final (i, m) in LocalInsights.milestones(featured).indexed) ...[
+                    if (i > 0) const SizedBox(height: Sp.lg),
+                    _MilestoneStep(milestone: m),
+                  ],
+                ],
+              ),
+            ),
+          ] else
+            OobliCard(
+              radius: Rad.lg,
+              color: c.primary.withValues(alpha: 0.06),
+              borderColor: c.primary.withValues(alpha: 0.2),
+              child: Row(
+                children: [
+                  const OobliMascot(size: 40, glow: false, mood: MascotMood.joy),
+                  const SizedBox(width: Sp.md),
+                  Expanded(
+                    child: Text(
+                      done.length == 1
+                          ? 'You reached your goal! What are you saving for next?'
+                          : 'All ${done.length} goals reached! What are you saving for next?',
+                      style: t.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (others.isNotEmpty) ...[
             const SizedBox(height: Sp.lg),
             Text('Other Goals', style: t.titleLarge),
@@ -168,16 +208,68 @@ class _GoalsBody extends ConsumerWidget {
               children: [for (final g in others) _SmallGoalCard(goal: g)],
             ),
           ],
-          const SizedBox(height: Sp.lg),
-          OobliButton(
-            label: 'Create New Goal',
-            icon: Icons.add_rounded,
-            variant: OobliButtonVariant.outline,
-            size: OobliButtonSize.medium,
-            fullWidth: true,
-            onPressed: () => showGoalEditor(context),
-          ),
+          if (done.isNotEmpty) ...[
+            const SizedBox(height: Sp.lg),
+            Text('Achieved', style: t.titleLarge),
+            const SizedBox(height: Sp.md),
+            OobliCard(
+              radius: Rad.lg,
+              padding: const EdgeInsets.symmetric(horizontal: Sp.md),
+              child: Column(
+                children: [
+                  for (final (i, g) in done.indexed) ...[
+                    if (i > 0) const Divider(height: 1),
+                    _AchievedRow(goal: g),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+/// A reached goal: one slim row; tapping shows its history.
+class _AchievedRow extends StatelessWidget {
+  const _AchievedRow({required this.goal});
+
+  final Goal goal;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = context.text;
+    return Pressable(
+      onTap: () => showGoalDetails(context, goal),
+      scale: 0.98,
+      semanticLabel: '${goal.title}, reached',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Sp.md),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
+              child: Icon(Icons.check_rounded, size: 18, color: c.onPrimary),
+            ),
+            const SizedBox(width: Sp.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(goal.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyLarge),
+                  Text('${Fmt.ksh(goal.target)} reached', style: t.labelSmall.copyWith(color: c.secondaryText)),
+                ],
+              ),
+            ),
+            Icon(goal.icon.icon, size: 20, color: c.secondaryText),
+            const SizedBox(width: Sp.xs),
+            Icon(Icons.chevron_right_rounded, size: 20, color: c.hint),
+          ],
+        ),
       ),
     );
   }
