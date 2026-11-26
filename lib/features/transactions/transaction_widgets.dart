@@ -13,7 +13,7 @@ import '../../ui/widgets/tiles.dart';
 String _amount(Transaction tx, {bool spaced = true}) =>
     Fmt.signedKes(tx.amount, outgoing: tx.isOutgoing, spaced: spaced);
 
-/// Compact row for the dashboard's "Recent M-Pesa" list.
+/// Compact row for the dashboard's "Recent activity" list.
 class TransactionRow extends StatelessWidget {
   const TransactionRow({super.key, required this.tx, required this.onEdit});
 

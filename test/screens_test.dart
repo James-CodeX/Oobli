@@ -90,7 +90,7 @@ void main() {
     expect(find.text('Where it went'), findsOneWidget);
     expect(find.text('View analytics'), findsOneWidget);
     expect(find.text('Subscription Alert'), findsNothing);
-    expect(find.text('Recent M-Pesa'), findsOneWidget);
+    expect(find.text('Recent activity'), findsOneWidget);
     expect(find.text('Ask Oobli'), findsOneWidget);
   });
 
@@ -233,7 +233,7 @@ void main() {
 
   testWidgets('Dashboard in light theme', (tester) async {
     await render(tester, const DashboardScreen(), 'dashboard_light', height: 1400, mode: ThemeMode.light);
-    expect(find.text('Recent M-Pesa'), findsOneWidget);
+    expect(find.text('Recent activity'), findsOneWidget);
   });
 
   testWidgets('Splash follows the theme', (tester) async {

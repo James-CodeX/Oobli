@@ -18,6 +18,9 @@ import '../../ui/widgets/tiles.dart';
 /// the background and, if any turn up, offers to file them too. Never blocks.
 Future<void> offerSimilar(BuildContext context, Transaction tx, TxCategory category) async {
   final container = ProviderScope.containerOf(context, listen: false);
+  // The snack outlives the screen that asked (Quick sort's Done closes it),
+  // so Review opens the sheet from the app's own navigator, not [context].
+  final navigator = Navigator.of(context, rootNavigator: true);
   final groups = await container.read(transactionsProvider.notifier).similarTo(tx, category);
   if (groups.isEmpty || !context.mounted) return;
   final count = groups.fold<int>(0, (s, g) => s + g.count);
@@ -26,7 +29,10 @@ Future<void> offerSimilar(BuildContext context, Transaction tx, TxCategory categ
     '$count similar ${count == 1 ? 'transaction' : 'transactions'} could be ${category.label} too',
     icon: Icons.auto_awesome_rounded,
     actionLabel: 'Review',
-    onAction: () => showSimilarSheet(context, source: tx, category: category, groups: groups),
+    onAction: () {
+      if (!navigator.mounted) return;
+      showSimilarSheet(navigator.context, source: tx, category: category, groups: groups);
+    },
   );
 }
 

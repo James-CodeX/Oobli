@@ -715,7 +715,7 @@ class _RecentList extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Recent M-Pesa', style: t.titleLarge)),
+              Expanded(child: Text('Recent activity', style: t.titleLarge)),
               OobliButton(
                 label: 'Add Manual',
                 icon: Icons.add,

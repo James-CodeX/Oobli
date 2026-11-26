@@ -11,7 +11,6 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/ai_models.dart';
 import '../../data/models/category.dart';
 import '../../state/wrapped_controller.dart';
-import '../../ui/widgets/charts.dart';
 import '../../ui/widgets/feedback.dart';
 import '../../ui/widgets/mascot.dart';
 import '../../ui/widgets/oobli_button.dart';
@@ -86,16 +85,9 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
-    return Container(
-      padding: EdgeInsets.fromLTRB(Sp.lg, MediaQuery.paddingOf(context).top + Sp.md, Sp.lg, Sp.xl),
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [c.primary, c.accent],
-        ),
-      ),
+    final ready = data != null && !data!.recap.isEmpty;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(Sp.lg, MediaQuery.paddingOf(context).top + Sp.md, Sp.lg, 0),
       child: Column(
         children: [
           Row(
@@ -103,36 +95,30 @@ class _Header extends StatelessWidget {
             children: [
               OobliIconButton(
                 icon: Icons.close_rounded,
-                color: Colors.black,
+                color: c.secondaryText,
                 tooltip: 'Close',
                 onPressed: () => context.go(Routes.feed),
               ),
-              OobliIconButton(
-                icon: Icons.share_rounded,
-                color: Colors.black,
-                tooltip: 'Share',
-                onPressed: () => _share(context),
-              ),
+              if (ready)
+                OobliIconButton(
+                  icon: Icons.ios_share_rounded,
+                  color: c.secondaryText,
+                  tooltip: 'Share',
+                  onPressed: () => _share(context),
+                ),
             ],
           ),
-          Container(
-            width: 96,
-            height: 96,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.18), shape: BoxShape.circle),
-            child: const OobliMascot(size: 64, glow: false, mood: MascotMood.party),
-          ),
-          const SizedBox(height: Sp.lg),
+          const OobliMascot(size: 120, glow: false, mood: MascotMood.party, interactive: true),
+          const SizedBox(height: Sp.md),
           Text(
             'Oobli Wrapped',
-            style: t.headlineMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w800, shadows: const [
-              Shadow(color: Color(0x33000000), offset: Offset(0, 2)),
-            ]),
+            style: t.labelLarge.copyWith(color: c.primary, fontWeight: FontWeight.w700, letterSpacing: 0.4),
           ),
           const SizedBox(height: Sp.xs),
           Text(
-            Fmt.monthYear(month).toUpperCase(),
-            style: t.labelLarge.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+            Fmt.monthYear(month),
+            textAlign: TextAlign.center,
+            style: t.headlineMedium.copyWith(fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -151,18 +137,20 @@ class _Body extends StatelessWidget {
     final t = context.text;
     final recap = data.recap;
     final story = data.story;
-    final top = recap.categories.entries.take(3).toList();
-    final rest = recap.categories.entries.skip(3).fold<double>(0, (s, e) => s + e.value);
-    final rankColors = [c.primary, c.accent, c.secondary];
+    final top = recap.categories.entries.take(4).toList();
+    final rest = recap.categories.entries.skip(4).fold<double>(0, (s, e) => s + e.value);
     final nextMonth = DateTime(recap.month.year, recap.month.month + 1);
+    final previousMonth = DateTime(recap.month.year, recap.month.month - 1);
+    final change = recap.total - recap.previousTotal;
 
     return Padding(
-      padding: const EdgeInsets.all(Sp.lg),
+      padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.xl, Sp.lg, Sp.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('You handled', textAlign: TextAlign.center, style: t.bodyMedium.copyWith(color: c.secondaryText)),
-          const SizedBox(height: Sp.md),
+          // The headline number.
+          Text('You spent', textAlign: TextAlign.center, style: t.bodyLarge.copyWith(color: c.secondaryText)),
+          const SizedBox(height: Sp.xs),
           TweenAnimationBuilder<double>(
             tween: Tween(begin: 0, end: recap.total),
             duration: const Duration(milliseconds: 1400),
@@ -170,105 +158,84 @@ class _Body extends StatelessWidget {
             builder: (context, v, _) => Text(
               Fmt.kes(v),
               textAlign: TextAlign.center,
-              style: t.headlineLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 32),
+              style: t.headlineLarge.copyWith(fontWeight: FontWeight.w800, fontSize: 36),
             ),
           ),
-          const SizedBox(height: Sp.md),
-          for (final badge in story.badges) ...[
-            _BadgePill(badge: badge),
-            const SizedBox(height: Sp.sm),
+          const SizedBox(height: Sp.xs),
+          Text(
+            [
+              'across ${recap.transactionCount} ${recap.transactionCount == 1 ? 'payment' : 'payments'}',
+              if (recap.previousTotal > 0)
+                '${Fmt.kes(change.abs())} ${change <= 0 ? 'less' : 'more'} than ${Fmt.monthName(previousMonth)}',
+            ].join(' · '),
+            textAlign: TextAlign.center,
+            style: t.bodyMedium.copyWith(color: c.secondaryText),
+          ),
+          if (story.badges.isNotEmpty) ...[
+            const SizedBox(height: Sp.lg),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: Sp.sm,
+              runSpacing: Sp.sm,
+              children: [for (final badge in story.badges) _BadgePill(badge: badge)],
+            ),
           ],
-          const SizedBox(height: Sp.lg),
-          OobliCard(
-            radius: Rad.lg,
-            color: c.surfaceVariant,
-            borderColor: c.outline,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const ToneTile(icon: Icons.psychology_rounded, tone: Tone.primary, size: 40, radius: Rad.md),
-                const SizedBox(width: Sp.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Oobli says...', style: t.titleMedium),
-                      const SizedBox(height: Sp.sm),
-                      Text(story.insight, style: t.bodyMedium.copyWith(color: c.secondaryText)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: Sp.xl),
-          Text('Where it went', style: t.titleLarge),
-          const SizedBox(height: Sp.md),
-          for (final (i, e) in top.indexed) ...[
-            _CategoryRank(category: e.key, amount: e.value, color: rankColors[i]),
-            const SizedBox(height: Sp.md),
-          ],
+          OobliSaysCard(centered: true, message: story.insight),
+          const SizedBox(height: Sp.xl),
+
+          // Where it went.
+          Text('Where it went', style: t.titleLarge.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: Sp.md),
           OobliCard(
             radius: Rad.lg,
+            padding: const EdgeInsets.symmetric(horizontal: Sp.lg, vertical: Sp.sm),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Spending Flow', style: t.titleMedium),
-                const SizedBox(height: Sp.lg),
-                Center(
-                  child: DonutChart(
-                    size: 140,
-                    legend: LegendPosition.bottom,
-                    centerValue: Fmt.compactKes(recap.total),
-                    centerLabel: 'spent',
-                    slices: [
-                      for (final (i, e) in top.indexed)
-                        DonutSlice(label: e.key.label.split(' ').first, value: e.value, color: rankColors[i]),
-                      if (rest > 0) DonutSlice(label: 'Other', value: rest, color: c.surfaceVariant),
-                    ],
-                  ),
-                ),
+                for (final (i, e) in top.indexed) ...[
+                  if (i > 0) Divider(height: 1, color: c.divider),
+                  _CategoryShare(category: e.key, amount: e.value, total: recap.total),
+                ],
+                if (rest > 0) ...[
+                  Divider(height: 1, color: c.divider),
+                  _CategoryShare(amount: rest, total: recap.total),
+                ],
               ],
             ),
           ),
           const SizedBox(height: Sp.xl),
-          OobliCard(
-            radius: Rad.lg,
-            color: c.success.withValues(alpha: 0.1),
-            borderColor: c.success.withValues(alpha: 0.3),
-            child: Row(
-              children: [
-                Icon(Icons.workspace_premium_rounded, size: 32, color: c.onSurface),
-                const SizedBox(width: Sp.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(story.winTitle, style: t.titleSmall.copyWith(color: c.onSurface)),
-                      const SizedBox(height: Sp.xs),
-                      Text(story.winBody, style: t.bodySmall.copyWith(color: c.primaryText)),
-                    ],
-                  ),
+
+          // The month's win.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const ToneTile(icon: Icons.emoji_events_rounded, tone: Tone.primary, size: 40, radius: Rad.md, soft: true),
+              const SizedBox(width: Sp.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(story.winTitle, style: t.titleMedium.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: Sp.xs),
+                    Text(story.winBody, style: t.bodyMedium.copyWith(color: c.secondaryText, height: 1.4)),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: Sp.xl),
+          const SizedBox(height: Sp.xxl),
           OobliButton(
-            label: 'View Full Breakdown',
-            variant: OobliButtonVariant.outline,
+            label: 'Plan ${Fmt.monthName(nextMonth)}',
+            fullWidth: true,
+            onPressed: () => context.go(Routes.plans),
+          ),
+          const SizedBox(height: Sp.sm),
+          OobliButton(
+            label: 'See the full breakdown',
+            variant: OobliButtonVariant.ghost,
             size: OobliButtonSize.medium,
             fullWidth: true,
             onPressed: () => context.push(Routes.analytics),
-          ),
-          const SizedBox(height: Sp.md),
-          OobliButton(
-            label: 'Update ${Fmt.monthName(nextMonth)} Plan',
-            icon: Icons.arrow_forward_rounded,
-            size: OobliButtonSize.medium,
-            fullWidth: true,
-            onPressed: () => context.go(Routes.plans),
           ),
         ],
       ),
@@ -294,58 +261,93 @@ class _BadgePill extends StatelessWidget {
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: Sp.sm),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(99)),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.outline),
+        borderRadius: BorderRadius.circular(99),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: c.onSurface),
-          const SizedBox(width: Sp.sm),
-          Text(badge.label, style: context.text.labelMedium.copyWith(fontWeight: FontWeight.w700, color: c.onSurface)),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: Sp.xs),
+          Text(badge.label, style: context.text.labelMedium.copyWith(fontWeight: FontWeight.w600, color: c.primaryText)),
         ],
       ),
     );
   }
 }
 
-class _CategoryRank extends StatelessWidget {
-  const _CategoryRank({required this.category, required this.amount, required this.color});
+/// One line of "Where it went": the category, what it cost and a thin bar
+/// for its share of the month. Without [category] it's the "Other" line.
+class _CategoryShare extends StatelessWidget {
+  const _CategoryShare({this.category, required this.amount, required this.total});
 
-  final TxCategory category;
+  final TxCategory? category;
   final double amount;
-  final Color color;
+  final double total;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = context.text;
-    return Pressable(
-      onTap: () => context.push('${Routes.activity}?q=${Uri.encodeComponent(category.label)}'),
-      scale: 0.98,
-      child: OobliCard(
-        radius: Rad.lg,
-        padding: const EdgeInsets.symmetric(horizontal: Sp.md, vertical: Sp.lg),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: Icon(category.icon, size: 18, color: Colors.black.withValues(alpha: 0.7)),
+    final cat = category;
+    final share = total <= 0 ? 0.0 : (amount / total).clamp(0.0, 1.0);
+    final color = cat == null ? c.secondaryText : c.tone(cat.tone);
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: Sp.md),
+      child: Row(
+        children: [
+          cat == null
+              ? ToneTile(icon: Icons.more_horiz_rounded, tone: Tone.neutral, size: 36, radius: Rad.md, soft: true)
+              : ToneTile(icon: cat.icon, tone: cat.tone, size: 36, radius: Rad.md, soft: true),
+          const SizedBox(width: Sp.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(cat?.label ?? 'Everything else',
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleSmall),
+                    ),
+                    Text(Fmt.kes(amount), style: t.titleSmall.copyWith(fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                const SizedBox(height: Sp.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          value: share,
+                          minHeight: 4,
+                          color: color,
+                          backgroundColor: c.surfaceVariant,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: Sp.md),
+                    SizedBox(
+                      width: 36,
+                      child: Text('${(share * 100).round()}%',
+                          textAlign: TextAlign.end, style: t.labelMedium.copyWith(color: c.secondaryText)),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: Sp.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(category.label, style: t.titleMedium),
-                  const SizedBox(height: Sp.xs),
-                  Text(Fmt.kes(amount), style: t.bodyMedium.copyWith(color: c.secondaryText)),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: c.secondaryText),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+    if (cat == null) return row;
+    return Pressable(
+      onTap: () => context.push('${Routes.activity}?q=${Uri.encodeComponent(cat.label)}'),
+      scale: 0.98,
+      child: row,
     );
   }
 }

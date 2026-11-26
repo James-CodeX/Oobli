@@ -10,6 +10,8 @@ describe('landing page', () => {
   it('renders every section and links to the legal pages', () => {
     render(<App />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/M-Pesa money/);
+    expect(screen.getByText(/M-Pesa and bank messages/)).toBeTruthy();
+    expect(screen.getByRole('img', { name: /Oobli's home screen/ }).getAttribute('src')).toBe('/app-home.webp');
     for (const title of ['reads your M-Pesa for you', 'sort anything in one tap', 'plans that fit your pay', 'OOBLI WRAPPED', 'private by design']) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     }

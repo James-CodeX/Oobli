@@ -176,7 +176,7 @@ abstract final class LocalInsights {
   static WrappedStory wrapped(MonthRecap recap) {
     final badges = <WrappedBadge>[
       if (recap.saved > 0) const WrappedBadge(label: 'Saver', icon: 'saver'),
-      if (recap.transactionCount >= 30) const WrappedBadge(label: 'M-Pesa Power User', icon: 'power'),
+      if (recap.transactionCount >= 30) const WrappedBadge(label: 'Power User', icon: 'power'),
       if (recap.previousTotal > 0 && recap.total < recap.previousTotal)
         const WrappedBadge(label: 'Spend Shrinker', icon: 'trend'),
     ];
