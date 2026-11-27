@@ -17,8 +17,9 @@ Appwrite Sites (site `oobli-web`) is connected to this repository and redeploys 
 | --- | --- |
 | Root directory | `./web` |
 | Framework | Vite |
+| Runtime | Node.js 22 (`node-22`) |
 | Install command | `npm ci` |
 | Build command | `npm run build` |
 | Output directory | `./dist` |
 
-Without the build command and output directory, Appwrite serves the unbuilt source and the page is blank.
+With a static runtime (`static-1`) there is no Node.js: builds fail with `npm: command not found`, or, without a build command, Appwrite serves the unbuilt source and the page is blank.
