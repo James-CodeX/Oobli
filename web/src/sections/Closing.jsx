@@ -5,11 +5,37 @@ import { Cat } from '../components/Cat.jsx';
 import { Button } from '../components/Button.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 
+const GITHUB_URL = 'https://github.com/James-CodeX/Oobli';
+
 const FAQ = [
   ['Is Oobli free?', 'Yes. Oobli is free to download and use.'],
+  [
+    "My phone won't install Oobli. What do I do?",
+    <>
+      <p>
+        Android's Play Protect is extra careful with apps from outside the Play Store that read SMS, because scam apps
+        misuse that permission. Oobli only reads money messages, and its code is open for anyone to check.
+      </p>
+      <ol>
+        <li>If you see a warning, tap <b>More details</b>, then <b>Install anyway</b>.</li>
+        <li>
+          If it says the app was blocked, open the <b>Play Store</b>, tap your profile picture, then{' '}
+          <b>Play Protect</b> and the settings gear. Turn off <b>Scan apps with Play Protect</b>, install Oobli, then
+          turn it back on.
+        </li>
+      </ol>
+    </>,
+  ],
   ['Do I have to give Oobli my bank or M-Pesa PIN?', 'Never. Oobli only reads the confirmation SMS that M-Pesa and your bank already send you. It cannot move money.'],
   ['Which messages does Oobli read?', 'Only messages from financial senders such as MPESA and bank short codes. Chats from people are skipped on your phone and never uploaded.'],
   ['What does the AI do?', 'It sorts transactions the rules could not place, writes your "Oobli says…" nudges, drafts Oobli Plans and your monthly Wrapped. You can correct any category and Oobli learns from it.'],
+  [
+    'Is Oobli open source?',
+    <p>
+      Yes. The full code is on <a href={GITHUB_URL}>GitHub</a> under the MIT license. Read it, build the app yourself,
+      or make your own version with the AI of your choice.
+    </p>,
+  ],
   ['Is it on iPhone?', 'Not yet. iOS does not let apps read SMS, so Oobli is Android-first. You can still add transactions by hand.'],
 ];
 
@@ -49,7 +75,7 @@ export function Faq() {
             <button type="button" onClick={() => setOpen(open === i ? -1 : i)} aria-expanded={open === i}>
               {q}<span aria-hidden="true">+</span>
             </button>
-            <div className="faq-answer"><p>{a}</p></div>
+            <div className="faq-answer"><div className="faq-body">{typeof a === 'string' ? <p>{a}</p> : a}</div></div>
           </div>
         ))}
       </div>

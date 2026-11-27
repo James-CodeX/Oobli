@@ -20,6 +20,15 @@ describe('landing page', () => {
     expect(within(footer).getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe('/privacy/');
   });
 
+  it('answers install and open-source questions in the FAQ', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /won't install Oobli/ }));
+    expect(screen.getByText('Install anyway')).toBeTruthy();
+    expect(screen.getByText('Scan apps with Play Protect')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /open source/ }));
+    expect(screen.getByRole('link', { name: 'GitHub' }).getAttribute('href')).toBe('https://github.com/James-CodeX/Oobli');
+  });
+
   it('shows example merchants when a category is tapped', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /Bank withdrawal/i, pressed: false }));

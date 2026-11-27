@@ -198,7 +198,9 @@ git tag v1.7.0 && git push origin v1.7.0
 
 Signing uses the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD` and `ANDROID_KEY_ALIAS`. Local release builds read `android/key.properties` (git-ignored).
 
-- **Web** tests, builds and deploys `web/` to Appwrite Sites on pushes that touch it. It needs an `APPWRITE_API_KEY` secret with `sites.read`, `sites.write`, `files.read` and `files.write`.
+- **Web** tests and builds `web/` when it changes. The site itself is deployed by Appwrite Sites, which is connected to this repository and redeploys on every push to `main`.
+- **CI** skips changes that only touch the website or docs.
+- The Release workflow uploads each APK to the public `downloads` bucket for the website's download button. It needs an `APPWRITE_API_KEY` secret with `files.read` and `files.write`.
 
 ## Publishing your own build
 

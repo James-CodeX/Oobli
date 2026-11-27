@@ -1,9 +1,11 @@
 name: Web
 
+# Tests and builds the website. Deploying is done by Appwrite Sites itself:
+# it is connected to this repository and redeploys on every push to main.
 on:
   push:
     branches: [main]
-    paths: ['web/**', '.github/workflows/web.yml', '.github/scripts/appwrite-deploy-site.sh']
+    paths: ['web/**', '.github/workflows/web.yml']
   pull_request:
     paths: ['web/**']
   workflow_dispatch:
@@ -28,25 +30,3 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: site
-          path: web/dist
-
-  deploy:
-    needs: build
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://oobli.jimicore.tech
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: site
-          path: dist
-      - name: Deploy to Appwrite Sites
-        env:
-          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-        run: .github/scripts/appwrite-deploy-site.sh oobli-web dist

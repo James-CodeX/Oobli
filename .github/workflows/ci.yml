@@ -1,9 +1,13 @@
 name: CI
 
+# Skipped when a change only touches the website or docs: there is no app
+# code to check.
 on:
   push:
     branches: [main]
+    paths-ignore: ['web/**', 'docs/**', '**/*.md', 'LICENSE', '.github/readme/**', '.github/workflows/web.yml']
   pull_request:
+    paths-ignore: ['web/**', 'docs/**', '**/*.md', 'LICENSE', '.github/readme/**', '.github/workflows/web.yml']
 
 concurrency:
   group: ci-${{ github.ref }}

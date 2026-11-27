@@ -557,9 +557,14 @@ input[type='range']::-moz-range-thumb {
 .faq-item button span { font-size: 24px; line-height: 1; color: var(--ink-soft); transition: transform 0.25s; }
 .faq-item.is-open button span { transform: rotate(45deg); color: var(--green); }
 .faq-answer { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease; }
-.faq-answer > p { overflow: hidden; margin: 0; padding: 0 20px; color: var(--ink-soft); }
+.faq-body { overflow: hidden; padding: 0 20px; color: var(--ink-soft); }
+.faq-body p { margin: 0; }
+.faq-body p + ol, .faq-body ol + p { margin-top: 10px; }
+.faq-body ol { margin: 0; padding-left: 22px; line-height: 1.6; }
+.faq-body li + li { margin-top: 6px; }
+.faq-body b { color: var(--ink); }
 .faq-item.is-open .faq-answer { grid-template-rows: 1fr; }
-.faq-item.is-open .faq-answer > p { padding-bottom: 18px; }
+.faq-item.is-open .faq-body { padding-bottom: 18px; }
 
 /* ---------- Final CTA ---------- */
 .final { position: relative; padding-top: 88px; text-align: center; }
