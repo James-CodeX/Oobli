@@ -17,7 +17,8 @@ Transaction tx(String id, String merchant, {bool confirmed = false, TxDirection 
       category: TxCategory.transfer,
       channel: TxChannel.send,
       source: TxSource.mpesa,
-      occurredAt: DateTime(2026, 11, 20),
+      // Yesterday, so it always counts as "this week" whatever day the tests run.
+      occurredAt: DateTime.now().subtract(const Duration(days: 1)),
       aiCategorized: true,
       confirmed: confirmed,
     );
