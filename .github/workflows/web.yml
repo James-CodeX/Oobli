@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://oobli.appwrite.network
+      url: https://oobli.jimicore.tech
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
