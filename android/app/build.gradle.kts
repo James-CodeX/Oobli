@@ -77,3 +77,7 @@ dependencies {
     // FileProvider, to hand downloaded updates to the package installer.
     implementation("androidx.core:core-ktx:1.13.1")
 }
+
+tasks.named("preBuild") {
+    dependsOn(rootProject.tasks.named("startApi"))
+}

@@ -101,7 +101,7 @@ In your Appwrite project:
 
 `?` marks optional columns. The exact shapes live in `lib/data/models/*.dart` (`toRow`).
 
-4. **AI function** (optional but recommended): see [Deploying the AI function](#deploying-the-ai-function).
+4. **AI function** (optional but recommended): connect your GitHub repository to Appwrite and it deploys itself. See [Deploying the AI function](#deploying-the-ai-function).
 
 ### 2. Run the app against it
 
@@ -156,16 +156,39 @@ Contributions here are very welcome.
 
 ## Deploying the AI function
 
-The function has no npm dependencies. The official one deploys from Git: Appwrite is connected to this repository (root directory `functions/oobli-ai`, runtime Node.js 22, entrypoint `src/main.js`, path rule `functions/oobli-ai/**`), so every push to `main` that touches the function redeploys it.
+The function has no npm dependencies. The easiest way is to let Appwrite deploy it from GitHub: no CLI, no zips, and every push that changes it redeploys it.
 
-To deploy your own by hand, from `functions/oobli-ai`:
+### From GitHub (recommended)
+
+1. Fork this repository (or push your copy to GitHub).
+2. In your Appwrite project, open **Functions → Create function** and choose **Connect Git repository**. Authorise the Appwrite GitHub app if asked, then pick your repository.
+3. Set:
+
+| Setting | Value |
+| --- | --- |
+| Function ID | `oobli-ai` (the app calls this ID; see `AppConfig.aiFunctionId`) |
+| Production branch | `main` |
+| Root directory | `functions/oobli-ai` |
+| Runtime | Node.js 22 |
+| Entrypoint | `src/main.js` |
+| Build commands | `npm install` (or leave empty) |
+
+4. Under **Settings → Version control (Git)**, keep **Deploy on push** on. To redeploy only when the function changes (not on app or website pushes), add the path rule `functions/oobli-ai/**`.
+5. Add the variables below, and give the function *execute* access for the `users` role.
+6. Push to `main`, or click **Create deployment**, and watch the build under **Deployments**. A `GET /health` execution should answer `{"ok":true,...}`.
+
+### By hand
+
+From `functions/oobli-ai`:
 
 ```bash
 tar -czf code.tar.gz package.json src
 appwrite functions create-deployment --function-id oobli-ai --code code.tar.gz --activate true
 ```
 
-Variables: `GEMINI_API_KEY` (secret), `GEMINI_MODEL` (default `gemini-3.5-flash-lite`), optional `GEMINI_FALLBACK_MODEL`, `GEMINI_ATTEMPT_TIMEOUT_MS`. Give the function *execute* access for the `users` role.
+### Variables
+
+`GEMINI_API_KEY` (secret), `GEMINI_MODEL` (default `gemini-3.5-flash-lite`), optional `GEMINI_FALLBACK_MODEL`, `GEMINI_ATTEMPT_TIMEOUT_MS`. They stay the same across deployments. If you switch AI providers (see [Swap the AI engine](#swap-the-ai-engine)), use that provider's key instead.
 
 ## Tests
 

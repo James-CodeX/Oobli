@@ -48,8 +48,6 @@ app.*.map.json
 .widget_preview/
 
 # Secrets (Gemini key lives only in the Appwrite Function variables)
-.env
-.env.*
 
 # Node (Appwrite Function)
 functions/**/node_modules/
@@ -58,3 +56,5 @@ functions/**/node_modules/
 android/key.properties
 *.jks
 *.keystore
+config.bat
+node_modules

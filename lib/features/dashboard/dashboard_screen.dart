@@ -50,6 +50,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       try {
         await ref.read(transactionsProvider.future);
         if (mounted) await ref.read(transactionsProvider.notifier).detectMoneyMoves();
+        final merged = mounted ? await ref.read(transactionsProvider.notifier).removeDuplicates() : 0;
+        if (mounted && merged > 0) showOobliSnack(context, mergedNote(merged));
       } catch (_) {
         // The feed shows its own error state.
       }
@@ -76,6 +78,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Tell the user when a sync folded several messages into one payment.
+    ref.listen(smsSyncControllerProvider, (prev, next) {
+      if (next.phase == SyncPhase.done && prev?.phase != SyncPhase.done && next.merged > 0) {
+        showOobliSnack(context, mergedNote(next.merged));
+      }
+    });
     final c = context.colors;
     final txs = ref.watch(transactionsProvider);
     final profile = ref.watch(authControllerProvider).value;
@@ -798,3 +806,8 @@ class _LoadingFeed extends StatelessWidget {
         ),
       );
 }
+
+/// The note shown after duplicate copies of a payment are removed.
+String mergedNote(int n) => n == 1
+    ? 'Removed a duplicate: two messages were about one payment'
+    : 'Removed $n duplicates: several messages were about one payment';
