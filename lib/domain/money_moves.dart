@@ -1,5 +1,6 @@
 import '../data/models/category.dart';
 import '../data/models/transaction.dart';
+import 'duplicates.dart';
 
 /// Money that went out and came straight back (or the reverse): a refund, a
 /// friend returning cash, a reversed payment. Neither side is real spending
@@ -86,7 +87,9 @@ abstract final class MoneyMoves {
   ///
   /// * A bank credit that carries an M-Pesa send's reference ("received in
   ///   a/c ... M-PESA Ref X") proves the user topped up their own account:
-  ///   both are own transfers, and certain.
+  ///   both are own transfers, and certain. Without a shared reference, the
+  ///   same amount minutes apart, with the M-Pesa side naming the bank, is
+  ///   just as clear.
   /// * A bank loan repayment with a same-amount M-Pesa payment to that bank
   ///   shortly before: the bank's message is the repayment, so the M-Pesa
   ///   side only moved the money there. That is a likely answer, so the
@@ -106,6 +109,23 @@ abstract final class MoneyMoves {
         if (!t.confirmed) {
           changed[t.id] = t.copyWith(category: TxCategory.ownTransfer, aiCategorized: false, confirmed: true);
         }
+      }
+    }
+    for (final credit in all) {
+      if (credit.source != TxSource.bank || credit.isOutgoing || credit.category != TxCategory.ownTransfer) continue;
+      if (credit.confirmed || changed.containsKey(credit.id)) continue;
+      final bank = Duplicates.institution(credit.merchant);
+      for (final t in all) {
+        if (t.source != TxSource.mpesa || !t.isOutgoing || changed.containsKey(t.id)) continue;
+        if (t.confirmed && t.category != TxCategory.ownTransfer) continue;
+        if ((t.amount - credit.amount).abs() >= 0.5) continue;
+        if (t.occurredAt.difference(credit.occurredAt).abs() > Duplicates.window) continue;
+        if (Duplicates.institution(t.merchant).intersection(bank).isEmpty) continue;
+        changed[credit.id] = credit.copyWith(aiCategorized: false, confirmed: true);
+        if (!t.confirmed) {
+          changed[t.id] = t.copyWith(category: TxCategory.ownTransfer, aiCategorized: false, confirmed: true);
+        }
+        break;
       }
     }
     for (final repaid in all) {

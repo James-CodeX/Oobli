@@ -14,6 +14,7 @@ import '../data/services/sms_inbox_service.dart';
 import '../data/services/sms_sync_service.dart';
 import '../data/services/ai_service.dart';
 import '../domain/bills.dart';
+import '../domain/duplicates.dart';
 import '../domain/money_moves.dart';
 import '../domain/similar_merchants.dart';
 import '../domain/sorting.dart';
@@ -593,6 +594,27 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
   /// withdrawal). Otherwise receiving from John would relabel paying John.
   static bool canLearn(Transaction tx, TxCategory category) => tx.isOutgoing || category.receivingOnly;
 
+  /// Removes extra copies of one payment (see [Duplicates]): banks often send
+  /// two messages for a loan repayment, and a later sync can read a message
+  /// again. A note on a removed copy moves to the one kept. Returns how many
+  /// were removed.
+  Future<int> removeDuplicates() async {
+    final groups = Duplicates.find(_current);
+    if (groups.isEmpty) return 0;
+    final extra = {for (final g in groups) for (final t in g.extra) t.id};
+    final noted = <String, Transaction>{
+      for (final g in groups)
+        if (g.keep.note == null)
+          if (g.extra.map((t) => t.note).nonNulls.firstOrNull case final note?) g.keep.id: g.keep.copyWith(note: note),
+    };
+    _set([for (final t in _current) if (!extra.contains(t.id)) noted[t.id] ?? t]);
+    _outbox.patchMany({
+      for (final id in extra) id: {'deleted': true},
+      for (final t in noted.values) t.id: {'note': t.note},
+    });
+    return extra.length;
+  }
+
   Future<void> delete(Transaction tx) async {
     _outbox.patchTx(tx.id, {'deleted': true});
     _set(_current.where((t) => t.id != tx.id).toList());
@@ -632,10 +654,13 @@ enum SyncPhase { idle, syncing, done, failed }
 
 @immutable
 class SyncState {
-  const SyncState({this.phase = SyncPhase.idle, this.added = 0, this.message});
+  const SyncState({this.phase = SyncPhase.idle, this.added = 0, this.merged = 0, this.message});
 
   final SyncPhase phase;
   final int added;
+
+  /// Extra copies of a payment this sync removed (several messages, one payment).
+  final int merged;
   final String? message;
 
   bool get isSyncing => phase == SyncPhase.syncing;
@@ -681,13 +706,17 @@ class SmsSyncController extends Notifier<SyncState> {
       if (result.added.isNotEmpty) {
         await transactions.markReviewed([for (final t in result.added) if (t.aiCategorized) t.id]);
         await transactions.detectMoneyMoves();
-        unawaited(transactions.autoSort());
       }
+      // Run even when nothing is new: older copies get cleaned up too.
+      final merged = await transactions.removeDuplicates();
+      final kept = {for (final t in transactions._current) t.id};
+      final added = result.added.where((t) => kept.contains(t.id)).length;
+      if (added > 0) unawaited(transactions.autoSort());
       await ref.read(authControllerProvider.notifier).updateProfile(
             (p) => p.copyWith(smsSyncEnabled: true, lastSmsSyncAt: DateTime.now()),
           );
-      state = SyncState(phase: SyncPhase.done, added: result.added.length);
-      return result.added.length;
+      state = SyncState(phase: SyncPhase.done, added: added, merged: merged);
+      return added;
     } catch (e) {
       final failure = AppFailure.from(e);
       state = SyncState(phase: SyncPhase.failed, message: failure.message);

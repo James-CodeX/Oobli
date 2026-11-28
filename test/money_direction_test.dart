@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oobli/data/models/category.dart';
 import 'package:oobli/data/models/transaction.dart';
@@ -5,7 +6,13 @@ import 'package:oobli/data/services/ai_service.dart';
 import 'package:oobli/data/services/keyword_categorizer.dart';
 import 'package:oobli/data/services/sms_parser.dart';
 import 'package:oobli/data/services/transaction_categorizer.dart';
+import 'package:oobli/domain/duplicates.dart';
 import 'package:oobli/domain/money_moves.dart';
+import 'package:oobli/state/auth_controller.dart';
+import 'package:oobli/state/sync_engine.dart';
+import 'package:oobli/state/transactions_controller.dart';
+
+import 'support/fakes.dart';
 
 // Real KCB and KCB M-PESA messages, with names, accounts and codes changed.
 const loanOffer = 'Dear JANE, your KCB Salary advance limit has been reviewed. You can now borrow up to KES 70,700.00.';
@@ -221,6 +228,102 @@ void main() {
       final credit = tx('credit', 13000, TxDirection.inbound, TxCategory.ownTransfer,
           source: TxSource.bank, ref: 'UKRAB12CDE', confirmed: true);
       expect(MoneyMoves.explained([send, credit]), isEmpty);
+    });
+  });
+
+  group('one payment, several messages', () {
+    final at = DateTime(2026, 11, 27, 15, 22);
+    Transaction row(String id, String merchant, double amount,
+            {TxSource source = TxSource.bank,
+            TxDirection dir = TxDirection.out,
+            TxCategory cat = TxCategory.debt,
+            String? ref,
+            bool ai = false,
+            Duration after = Duration.zero,
+            String? note}) =>
+        Transaction(
+          id: id,
+          fingerprint: id,
+          amount: amount,
+          direction: dir,
+          merchant: merchant,
+          category: cat,
+          channel: source == TxSource.bank ? TxChannel.bank : TxChannel.paybill,
+          source: source,
+          occurredAt: at.add(after),
+          reference: ref,
+          aiCategorized: ai,
+          confirmed: true,
+          note: note,
+        );
+
+    // What the app held: two rows from the old AI reading, one from 1.6.2.
+    final kcb = [
+      row('old1', 'KCB Mobile Loan', 25125, ai: true),
+      row('old2', 'KCB Mobi Loan', 25125, ref: 'MBNXY1ABCD2EFGH3', ai: true),
+      row('new', 'KCB loan', 25125, ref: 'MBNXY1ABCD2EFGH3', after: const Duration(seconds: 38)),
+    ];
+
+    test('the three KCB repayment rows are one payment', () {
+      final groups = Duplicates.find([...kcb, row('fuliza', 'Fuliza M-Pesa', 277, source: TxSource.mpesa, ref: 'UKR1')]);
+      expect(groups, hasLength(1));
+      expect(groups.single.keep.id, 'new', reason: 'has a code and was read on the phone');
+      expect(groups.single.extra.map((t) => t.id), unorderedEquals(['old1', 'old2']));
+    });
+
+    test('real separate payments stay separate', () {
+      expect(Duplicates.find([
+        row('a', 'Fuliza M-Pesa', 500, source: TxSource.mpesa, ref: 'UKR1'),
+        row('b', 'Fuliza M-Pesa', 500, source: TxSource.mpesa, ref: 'UKR2'),
+      ]), isEmpty, reason: 'two M-Pesa codes are two payments');
+      expect(Duplicates.find([row('a', 'KCB loan', 500), row('b', 'Equity loan', 500)]), isEmpty,
+          reason: 'different lenders');
+      expect(Duplicates.find([row('a', 'KCB loan', 500), row('b', 'KCB loan', 500, after: const Duration(minutes: 6))]),
+          isEmpty, reason: 'more than 5 minutes apart');
+      expect(Duplicates.find([row('a', 'KCB loan', 500), row('b', 'KCB loan', 500, dir: TxDirection.inbound)]),
+          isEmpty, reason: 'one borrowed, one repaid');
+      expect(Duplicates.find([
+        row('a', 'Java House', 500, cat: TxCategory.food),
+        row('b', 'Java House', 500, cat: TxCategory.food),
+      ]), isEmpty, reason: 'only loan and savings messages are merged');
+    });
+
+    test('the same savings move told by M-Pesa and KCB M-PESA', () {
+      final groups = Duplicates.find([
+        row('mpesa', 'KCB M-PESA', 2000, source: TxSource.mpesa, cat: TxCategory.savings, ref: 'UKR9'),
+        row('bank', 'KCB M-Pesa', 2000, cat: TxCategory.savings, after: const Duration(minutes: 1)),
+      ]);
+      expect(groups.single.keep.id, 'mpesa');
+    });
+
+    test('M-Pesa to KCB with no shared reference is still one own transfer', () {
+      final send = row('send', 'KCB', 13000, source: TxSource.mpesa, cat: TxCategory.debt, ref: 'UKR5')
+          .copyWith(confirmed: false);
+      final credit = row('credit', 'M-Pesa to KCB', 13000, dir: TxDirection.inbound, cat: TxCategory.ownTransfer,
+              after: const Duration(minutes: 2))
+          .copyWith(confirmed: false);
+      final fixed = {for (final t in MoneyMoves.explained([send, credit])) t.id: t};
+      expect(fixed['send']!.category, TxCategory.ownTransfer);
+      expect(fixed['send']!.confirmed, isTrue);
+      expect(fixed['credit']!.confirmed, isTrue);
+    });
+
+    test('the controller removes the copies everywhere and keeps notes', () async {
+      final txRepo = FakeTxRepo();
+      final rows = [kcb[0].copyWith(note: 'cleared it'), kcb[1], kcb[2]];
+      final container = ProviderContainer(overrides: [...await overrides(transactions: rows, txRepo: txRepo)]);
+      addTearDown(container.dispose);
+      await container.read(authControllerProvider.future);
+      await container.read(transactionsProvider.future);
+
+      expect(await container.read(transactionsProvider.notifier).removeDuplicates(), 2);
+      final left = container.read(transactionsProvider).value!;
+      expect(left.single.id, 'new');
+      expect(left.single.note, 'cleared it');
+      await container.read(outboxProvider.notifier).flush();
+      expect(txRepo.patches['old1']?['deleted'], isTrue);
+      expect(txRepo.patches['old2']?['deleted'], isTrue);
+      expect(await container.read(transactionsProvider.notifier).removeDuplicates(), 0, reason: 'idempotent');
     });
   });
 }
