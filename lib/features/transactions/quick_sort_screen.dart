@@ -590,7 +590,7 @@ class _SortCard extends StatelessWidget {
               Icon(Icons.check_circle_rounded, size: 14, color: c.primary),
               const SizedBox(width: 4),
               Flexible(
-                child: Text(tx.category.label,
+                child: Text(tx.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: t.labelMedium.copyWith(color: c.primary, fontWeight: FontWeight.w700)),
@@ -598,7 +598,7 @@ class _SortCard extends StatelessWidget {
             ],
           )
         : Text(
-            tx.aiCategorized ? 'Oobli guessed ${tx.category.label}' : 'Guess: ${tx.category.label}',
+            tx.aiCategorized ? 'Oobli guessed ${tx.label}' : 'Guess: ${tx.label}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: t.labelMedium.copyWith(color: c.secondaryText),
@@ -688,6 +688,7 @@ class _SortCard extends StatelessWidget {
                               CategoryChip(
                                 category: cat,
                                 selected: cat == tx.category,
+                                inbound: !tx.isOutgoing,
                                 onTap: () => onPick(cat),
                               ),
                           ],

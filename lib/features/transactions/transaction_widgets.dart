@@ -131,7 +131,7 @@ class TransactionCard extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      tx.category.label,
+                      tx.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: t.labelMedium.copyWith(color: review ? c.primaryText : c.secondaryText, fontWeight: FontWeight.w700),
@@ -175,7 +175,7 @@ class TransactionCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text("Is this '${tx.category.label}'?",
+                        child: Text("Is this '${tx.label}'?",
                             style: t.bodySmall.copyWith(fontWeight: FontWeight.w700, color: c.onSurface)),
                       ),
                       OobliButton(
@@ -214,19 +214,30 @@ List<TxCategory> categoryChoices(TxDirection direction) =>
 
 /// Pill with a category icon and label, tinted by the category tone when selected.
 class CategoryChip extends StatelessWidget {
-  const CategoryChip({super.key, required this.category, required this.selected, required this.onTap});
+  const CategoryChip({
+    super.key,
+    required this.category,
+    required this.selected,
+    required this.onTap,
+    this.inbound,
+  });
 
   final TxCategory category;
   final bool selected;
   final VoidCallback onTap;
 
+  /// The money's direction, when known, so Savings and Debt & Loans read as
+  /// "Added to savings", "Loan repaid" and so on.
+  final bool? inbound;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final color = c.tone(category.tone);
+    final label = inbound == null ? category.label : category.labelFor(inbound: inbound!);
     return Pressable(
       onTap: onTap,
-      semanticLabel: category.label,
+      semanticLabel: label,
       child: AnimatedContainer(
         duration: Motion.fast,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -240,7 +251,7 @@ class CategoryChip extends StatelessWidget {
           children: [
             Icon(category.icon, size: 16, color: selected ? color : c.secondaryText),
             const SizedBox(width: 6),
-            Text(category.label, style: context.text.labelMedium.copyWith(color: c.primaryText)),
+            Text(label, style: context.text.labelMedium.copyWith(color: c.primaryText)),
           ],
         ),
       ),

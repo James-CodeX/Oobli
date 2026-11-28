@@ -11,8 +11,8 @@ export const CATEGORIES = {
   education: 'Education (school fees, courses, books, HELB)',
   airtime: 'Airtime & Data (Safaricom airtime, bundles)',
   transfer: 'Sent to someone (person-to-person transfers with no clear purpose)',
-  savings: 'Savings & Investments (M-Shwari deposit, M-Mali, MMF, SACCO, stocks)',
-  debt: 'Debt & Loans (Fuliza, M-Shwari/KCB-M-Pesa loan repayment, Tala, Branch)',
+  savings: 'Savings & Investments (out: money put into M-Shwari, KCB M-PESA savings, M-Mali, Ziidi, MMF, SACCO, stocks; in: money taken back out of them)',
+  debt: 'Debt & Loans (in: a loan or salary advance paid to the user; out: repaying Fuliza, M-Shwari, KCB, Tala, Branch, Hustler Fund or any loan)',
   fees: 'Fees & Charges (transaction costs, bank charges, withdrawal fees)',
   income: 'Income (salary, money received, business sales, refunds)',
   bank_withdrawal: 'Bank withdrawal (money IN only: the user moving their own money from a bank account to M-Pesa, e.g. sender is Equity, KCB, Co-op Bank, NCBA, Absa, I&M, Stanbic, Family Bank, DTB)',
@@ -26,6 +26,12 @@ export const CHANNELS = [
   'pochi', 'till', 'paybill', 'send', 'withdraw', 'airtime',
   'deposit', 'received', 'bank', 'fuliza', 'card', 'other',
 ];
+
+// How to read money that moves both ways. Shared by every prompt that picks a
+// category, so the rules stay one short block.
+export const MONEY_RULES = `- Savings and loans move both ways; the direction says which. Into savings is "savings" out; taking it back is "savings" in. A loan or advance received is "debt" in; repaying one is "debt" out.
+- Use "debt" only when the message is about a loan or advance; a plain move to or from savings is "savings".
+- Money from M-Pesa into the user's own bank account (e.g. "received in a/c ... M-PESA Ref") is "own_transfer", never "income".`;
 
 export function categoryGuide() {
   return Object.entries(CATEGORIES)

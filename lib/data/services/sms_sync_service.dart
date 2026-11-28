@@ -63,22 +63,28 @@ class SmsSyncService {
 
     for (final sms in messages) {
       if (!FinancialSenders.isFinancial(sms.sender)) continue;
-      if (FinancialSenders.isMpesa(sms.sender)) {
-        final p = MpesaParser.parse(sms);
-        if (p != null) {
-          parsed.add(p);
-          continue;
-        }
+      final isMpesa = FinancialSenders.isMpesa(sms.sender);
+      // Bank offers and notices: nothing to record, and no AI call.
+      if (!isMpesa && BankParser.isNoise(sms)) continue;
+      final p = isMpesa ? MpesaParser.parse(sms) : BankParser.parse(sms);
+      if (p != null) {
+        parsed.add(p);
+        continue;
       }
       if (_moneyWords.hasMatch(sms.body)) needsAi.add(sms);
     }
 
     if (needsAi.isNotEmpty) parsed.addAll(await _parseWithAi(needsAi));
 
-    // The same SMS can be read twice across overlapping syncs; keep the first.
+    // The same SMS can be read twice across overlapping syncs, and a bank can
+    // send two messages for one payment: keep one, preferably with a code.
     final unique = <String, ParsedTransaction>{};
     for (final p in parsed) {
-      unique.putIfAbsent(transactionFingerprint(p), () => p);
+      unique.update(
+        transactionFingerprint(p),
+        (kept) => kept.reference == null && p.reference != null ? p : kept,
+        ifAbsent: () => p,
+      );
     }
 
     final transactions = await _categorizer.categorize(

@@ -63,7 +63,8 @@ abstract final class SortPolicy {
       default:
         break;
     }
-    return KeywordCategorizer.categorize(merchant: t.merchant, channel: t.channel, direction: t.direction);
+    return KeywordCategorizer.categorize(
+        merchant: t.merchant, channel: t.channel, direction: t.direction, text: t.rawMessage);
   }
 }
 
@@ -103,7 +104,7 @@ abstract final class SortQueue {
     final amount = RegExp(r'^\d+(\.\d+)?$').hasMatch(digits) ? digits : null;
     bool plain(Transaction t) {
       if (amount != null && t.amount.toStringAsFixed(0).contains(amount.split('.').first)) return true;
-      final haystack = '${t.merchant} ${t.reference ?? ''} ${t.note ?? ''} ${t.category.label}'.toLowerCase();
+      final haystack = '${t.merchant} ${t.reference ?? ''} ${t.note ?? ''} ${t.category.label} ${t.label}'.toLowerCase();
       return q.split(RegExp(r'\s+')).every(haystack.contains);
     }
 

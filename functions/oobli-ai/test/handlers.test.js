@@ -135,3 +135,18 @@ test('search requires a query', async () => {
   const gemini = createGemini({ apiKey: 'k', models: ['a'], fetchImpl: async () => ({}) });
   await assert.rejects(search(gemini, { query: '' }), BadRequest);
 });
+
+test('categorize sends the message text and the both-ways money rules', async () => {
+  let prompt = '';
+  const gemini = {
+    generate: async ({ input }) => {
+      prompt = input;
+      return { results: [{ id: '1', category: 'debt', merchant: 'KCB loan', confidence: 0.9 }] };
+    },
+  };
+  const raw = 'Your MOBI LOAN REPAYMENT request of KES 25,125.00 has been received successfully.';
+  await categorize(gemini, { items: [{ id: '1', merchant: 'KCB', channel: 'bank', direction: 'out', amount: 25125, raw }] });
+  assert.ok(prompt.includes(raw), 'the SMS reaches the model');
+  assert.ok(prompt.includes('repaying one is "debt" out'));
+  assert.ok(prompt.includes('never "income"'));
+});

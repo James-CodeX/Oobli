@@ -47,6 +47,14 @@ enum TxCategory {
   /// relabel spending.
   bool get receivingOnly => this == income || this == bankWithdrawal;
 
+  /// What this category means for money coming in ([inbound]) or going out.
+  /// Savings and loans move both ways, so their label says which way.
+  String labelFor({required bool inbound}) => switch (this) {
+        savings => inbound ? 'Taken from savings' : 'Added to savings',
+        debt => inbound ? 'Loan received' : 'Loan repaid',
+        _ => label,
+      };
+
   /// Which plan bucket this category draws from.
   PlanBucket get bucket => switch (this) {
         rent || utilities || groceries || transport || health || education ||

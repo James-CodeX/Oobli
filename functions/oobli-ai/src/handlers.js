@@ -3,6 +3,7 @@ import {
   CATEGORY_KEYS,
   CHANNELS,
   categoryGuide,
+  MONEY_RULES,
   normaliseCategory,
   categoryForDirection,
 } from './categories.js';
@@ -65,6 +66,8 @@ Category keys:
 ${categoryGuide()}
 
 Rules:
+- "raw", when present, is the original SMS (shortened). Trust its wording over the merchant name.
+${MONEY_RULES}
 - Incoming money (direction "in") can only be: "income", "bank_withdrawal", "own_transfer", "debt" (loan disbursement), "savings" (savings withdrawal), "transfer" or "other".
 - Outgoing money to a bank paybill (Equity, KCB, Co-op...) is usually the user depositing to their own account: "own_transfer" (confidence < 0.7), unless it is clearly a loan repayment ("debt").
 - Incoming money from a bank (bank name, "Bank", Pesalink) is "bank_withdrawal": the user moved their own money, it is NOT income.
@@ -130,9 +133,10 @@ export async function parseSms(gemini, body) {
 
   const input = `Extract financial transactions from these Kenyan SMS alerts (M-Pesa and banks).
 For each message decide if it records a completed money movement for the account owner.
-Ignore OTPs, promotions, failed transactions, balance enquiries and loan offers (isTransaction=false).
+Ignore OTPs, promotions, failed transactions, balance enquiries, loan limits and offers, and service notices (isTransaction=false).
+If two messages confirm the same payment (e.g. a "request received" and a "payment received" for one loan repayment), only one is a transaction.
 - amount: positive number in KES (no fees).
-- direction: "out" for money leaving the account owner, "in" for money received.
+- direction: from the account owner's side. "out" for money leaving them (a loan repayment the bank "received" is "out"), "in" for money they received (a loan paid to them is "in").
 - merchant: who was paid or who paid (clean name).
 - channel: one of ${CHANNELS.join(', ')}.
 - reference: transaction code if present, else empty string.
@@ -140,6 +144,7 @@ Ignore OTPs, promotions, failed transactions, balance enquiries and loan offers 
 - occurredAt: ISO-8601 datetime in Africa/Nairobi (+03:00). Use receivedAt if the SMS has no date.
 - category: best category key from:
 ${categoryGuide()}
+${MONEY_RULES}
 
 Messages (JSON):
 ${compact(messages)}`;

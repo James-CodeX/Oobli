@@ -46,7 +46,7 @@ class SearchFilter {
     if (maxAmount != null && t.amount > maxAmount!) return false;
     if (categories.isEmpty && terms.isEmpty) return true;
     if (categories.contains(t.category)) return true;
-    final haystack = '${t.merchant} ${t.note ?? ''} ${t.reference ?? ''} ${t.category.label}'.toLowerCase();
+    final haystack = '${t.merchant} ${t.note ?? ''} ${t.reference ?? ''} ${t.category.label} ${t.label}'.toLowerCase();
     return terms.any(haystack.contains);
   }
 

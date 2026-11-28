@@ -156,7 +156,9 @@ Contributions here are very welcome.
 
 ## Deploying the AI function
 
-The function has no npm dependencies. From `functions/oobli-ai`:
+The function has no npm dependencies. The official one deploys from Git: Appwrite is connected to this repository (root directory `functions/oobli-ai`, runtime Node.js 22, entrypoint `src/main.js`, path rule `functions/oobli-ai/**`), so every push to `main` that touches the function redeploys it.
+
+To deploy your own by hand, from `functions/oobli-ai`:
 
 ```bash
 tar -czf code.tar.gz package.json src
@@ -198,7 +200,7 @@ git tag v1.7.0 && git push origin v1.7.0
 
 Signing uses the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD` and `ANDROID_KEY_ALIAS`. Local release builds read `android/key.properties` (git-ignored).
 
-- **Web** tests and builds `web/` when it changes. The site itself is deployed by Appwrite Sites, which is connected to this repository and redeploys on every push to `main`.
+- **Web** tests and builds `web/` when it changes. The site itself is deployed by Appwrite Sites, which is connected to this repository and redeploys on every push to `main`. The AI function deploys the same way when `functions/oobli-ai` changes.
 - **CI** skips changes that only touch the website or docs.
 - The Release workflow uploads each APK to the public `downloads` bucket for the website's download button. It needs an `APPWRITE_API_KEY` secret with `files.read` and `files.write`.
 

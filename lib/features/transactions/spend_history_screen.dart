@@ -344,7 +344,7 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
         Pressable(
           onTap: widget.onToggle,
           scale: 0.99,
-          semanticLabel: '${tx.merchant}, ${Fmt.kes(tx.amount)}, ${tx.category.label}',
+          semanticLabel: '${tx.merchant}, ${Fmt.kes(tx.amount)}, ${tx.label}',
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: Sp.lg, vertical: Sp.md),
             child: Row(
@@ -358,7 +358,7 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
                       Text(tx.merchant, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodyLarge),
                       const SizedBox(height: 2),
                       Text(
-                        '${tx.category.label} · ${Fmt.time12(tx.occurredAt)}',
+                        '${tx.label} · ${Fmt.time12(tx.occurredAt)}',
                         style: t.labelSmall.copyWith(color: c.secondaryText),
                       ),
                     ],
@@ -401,6 +401,7 @@ class _HistoryRowState extends ConsumerState<_HistoryRow> {
                             CategoryChip(
                               category: cat,
                               selected: cat == tx.category,
+                              inbound: !tx.isOutgoing,
                               onTap: () => cat == tx.category && !_everyOne ? widget.onToggle() : widget.onPick(cat, _everyOne),
                             ),
                         ],

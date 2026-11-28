@@ -146,8 +146,8 @@ void main() {
     });
 
     test('loans and savings coming in keep their own categories', () {
-      expect(received('KCB M-PESA'), TxCategory.debt);
       expect(received('Tala'), TxCategory.debt);
+      expect(received('M-Shwari Loan'), TxCategory.debt);
       expect(received('M-Shwari'), TxCategory.savings);
     });
 

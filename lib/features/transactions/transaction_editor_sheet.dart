@@ -206,6 +206,7 @@ class _TransactionEditorSheetState extends ConsumerState<TransactionEditorSheet>
                   CategoryChip(
                     category: cat,
                     selected: cat == _category,
+                    inbound: _direction == TxDirection.inbound,
                     onTap: () => setState(() => _category = cat),
                   ),
               ],

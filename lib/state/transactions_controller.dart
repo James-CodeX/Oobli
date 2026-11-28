@@ -533,17 +533,22 @@ class TransactionsController extends AsyncNotifier<List<Transaction>> {
 
   /// Marks out-and-back round trips (refunds, money returned) as Own transfer
   /// so they stop counting as spending and income. They stay unconfirmed and
-  /// show up in Quick sort, so the user has the final say. Returns the count.
+  /// show up in Quick sort, so the user has the final say. M-Pesa payments a
+  /// bank message explains are fixed too (see [MoneyMoves.explained]).
+  /// Returns the count.
   Future<int> detectMoneyMoves() async {
-    final moves = MoneyMoves.roundTrips(_current);
-    if (moves.isEmpty) return 0;
+    final explained = {for (final t in MoneyMoves.explained(_current)) t.id: t};
+    final current = [for (final t in _current) explained[t.id] ?? t];
     final changed = {
-      for (final m in moves)
+      ...explained,
+      for (final m in MoneyMoves.roundTrips(current))
         for (final t in m.both) t.id: t.copyWith(category: TxCategory.ownTransfer, aiCategorized: true, confirmed: false),
     };
+    if (changed.isEmpty) return 0;
     _set([for (final t in _current) changed[t.id] ?? t]);
     _outbox.patchMany({
-      for (final id in changed.keys) id: {'category': TxCategory.ownTransfer.key, 'aiCategorized': true, 'confirmed': false},
+      for (final t in changed.values)
+        t.id: {'category': t.category.key, 'aiCategorized': t.aiCategorized, 'confirmed': t.confirmed},
     });
     return changed.length;
   }

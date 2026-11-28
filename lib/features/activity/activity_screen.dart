@@ -102,6 +102,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         : txs.where((t) =>
             t.merchant.toLowerCase().contains(q) ||
             t.category.label.toLowerCase().contains(q) ||
+            t.label.toLowerCase().contains(q) ||
             (t.reference?.toLowerCase().contains(q) ?? false));
   }
 

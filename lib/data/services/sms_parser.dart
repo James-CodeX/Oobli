@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/category.dart';
 import '../models/transaction.dart';
+import 'keyword_categorizer.dart';
 
 /// A raw SMS as read from the device inbox.
 @immutable
@@ -33,6 +34,8 @@ class ParsedTransaction {
     this.reference,
     this.balance,
     this.category,
+    this.categorySure = true,
+    this.sameAs,
   });
 
   final double amount;
@@ -47,6 +50,13 @@ class ParsedTransaction {
 
   /// Set when the message type alone determines the category (airtime, M-Shwari, Fuliza).
   final TxCategory? category;
+
+  /// False when [category] is only the likely answer, so the user is asked.
+  final bool categorySure;
+
+  /// Messages that describe the same payment share this key, so it is stored
+  /// once (a bank's "request received" and its "payment received").
+  final String? sameAs;
 }
 
 /// Known financial senders. Matching is done on a normalised (alphanumeric,
@@ -153,11 +163,12 @@ abstract final class MpesaParser {
       result = build(m!.group(1), 'Fuliza M-Pesa', TxChannel.fuliza, TxDirection.out,
           category: TxCategory.debt);
     } else if ((m = _toMshwari.firstMatch(body)) != null) {
+      // M-Shwari holds savings and lends: the message says which this was.
       result = build(m!.group(1), 'M-Shwari', TxChannel.other, TxDirection.out,
-          category: TxCategory.savings);
+          category: KeywordCategorizer.mentionsLoan(body) ? TxCategory.debt : TxCategory.savings);
     } else if ((m = _fromMshwari.firstMatch(body)) != null) {
       result = build(m!.group(1), 'M-Shwari', TxChannel.other, TxDirection.inbound,
-          category: TxCategory.savings);
+          category: KeywordCategorizer.mentionsLoan(body) ? TxCategory.debt : TxCategory.savings);
     } else if ((m = _airtime.firstMatch(body)) != null) {
       result = build(m!.group(1), 'Safaricom Airtime', TxChannel.airtime, TxDirection.out,
           category: TxCategory.airtime);
@@ -220,5 +231,186 @@ abstract final class MpesaParser {
     const keepUpper = {'KPLC', 'KCB', 'DTB', 'NHIF', 'SHA', 'KRA', 'NCBA', 'ATM', 'SGR', 'II'};
     if (keepUpper.contains(w.toUpperCase())) return w.toUpperCase();
     return w[0].toUpperCase() + w.substring(1).toLowerCase();
+  }
+}
+
+/// On-device reader for the bank messages whose meaning is clear from their
+/// wording: money arriving from M-Pesa, loan repayments and disbursements,
+/// and moves in and out of savings. Anything else goes to the AI.
+abstract final class BankParser {
+  static const _amt = r'(?:KES|Ksh)\.?\s?([\d,]+(?:\.\d{1,2})?)';
+  static const _ci = false;
+
+  /// Offers, limits, notices and failures: never a money movement.
+  static final _noise = RegExp(
+    r'borrow up to|can now borrow|loan limit|limit has been|you (?:now )?qualify|pre-?approved|'
+    r'apply (?:now|for)|will be unavailable|maintenance|failed|unsuccessful|declined|insufficient|'
+    r'reversed|reversal',
+    caseSensitive: _ci,
+  );
+
+  // A real code has a digit, so "Transaction Completed" yields none.
+  static final _code = RegExp(r'^\s*((?=[A-Z0-9]*\d)[A-Z0-9]{10,20})\s+(?:[Cc]ompleted|[Cc]onfirmed)');
+  static final _fromMpesa = RegExp(
+    '$_amt\\s+received in a/?\\s?c\\b.*?M-?PESA Ref\\.?:?\\s*([A-Z0-9]{8,12})',
+    caseSensitive: _ci,
+  );
+  static final _repaid = [
+    RegExp('repayment (?:request )?of $_amt', caseSensitive: _ci),
+    RegExp('payment of $_amt for [^.]{0,60}\\bloan\\b', caseSensitive: _ci),
+    RegExp('$_amt [^.]{0,40}(?:repaid|paid) (?:to|towards) [^.]{0,40}\\bloan\\b', caseSensitive: _ci),
+  ];
+  static final _borrowed = [
+    RegExp('(?:loan|advance) (?:amount )?of $_amt (?:has been |was )?(?:disbursed|credited|deposited|sent)',
+        caseSensitive: _ci),
+    RegExp('$_amt (?:loan|salary advance) (?:has been |was )?(?:disbursed|credited|deposited)', caseSensitive: _ci),
+  ];
+
+  /// "KES 2,000.00 transferred to KCB M-PESA account" (into savings).
+  static final _toSavings = RegExp('$_amt\\s+transferred to (.+?) account', caseSensitive: _ci);
+
+  /// "You have transferred KES 2,000.00 from your M-PESA savings Account to M-PESA".
+  static final _fromSavings = RegExp('transferred\\s+$_amt\\s+from your (.+?) to ', caseSensitive: _ci);
+  static final _savingsPlace = RegExp(r'savings|kcb m-?pesa|m-?shwari|\block\b', caseSensitive: _ci);
+
+  static final _dmy = RegExp(r'(\d{1,2})/(\d{1,2})/(\d{2,4})\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?',
+      caseSensitive: _ci);
+  static final _ymd = RegExp(r'(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?', caseSensitive: _ci);
+
+  /// Whether the message is a bank notice that records no money movement.
+  static bool isNoise(SmsMessage sms) => _noise.hasMatch(sms.body);
+
+  /// The transaction in [sms], or `null` when its wording is not one Oobli
+  /// knows (the AI reads those).
+  static ParsedTransaction? parse(SmsMessage sms) {
+    final body = sms.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (_noise.hasMatch(body)) return null;
+    final bank = bankName(sms.sender);
+    final occurredAt = _date(body) ?? sms.receivedAt;
+    final code = _code.firstMatch(body)?.group(1)?.toUpperCase();
+
+    ParsedTransaction? build(
+      String? amount,
+      String merchant,
+      TxDirection direction,
+      TxCategory category, {
+      TxChannel channel = TxChannel.bank,
+      String? reference,
+      bool sure = true,
+      String? sameAs,
+    }) {
+      final value = double.tryParse((amount ?? '').replaceAll(',', ''));
+      if (value == null || value <= 0) return null;
+      return ParsedTransaction(
+        amount: value,
+        direction: direction,
+        merchant: merchant,
+        channel: channel,
+        source: TxSource.bank,
+        occurredAt: occurredAt,
+        raw: sms.body,
+        reference: reference ?? code,
+        category: category,
+        categorySure: sure,
+        sameAs: sameAs,
+      );
+    }
+
+    // Banks often send two messages for one loan payment; store it once.
+    String sameLoan(TxDirection d, String? amount) =>
+        'loan|$bank|${d.name}|${double.tryParse((amount ?? '').replaceAll(',', ''))}|'
+        '${occurredAt.year}-${occurredAt.month}-${occurredAt.day}';
+
+    RegExpMatch? m;
+    if ((m = _fromMpesa.firstMatch(body)) != null) {
+      // Usually the user topping up their own account from M-Pesa, but anyone
+      // can pay in: sure only once the matching M-Pesa send is found.
+      return build(m!.group(1), 'M-Pesa to $bank', TxDirection.inbound, TxCategory.ownTransfer,
+          reference: m.group(2)!.toUpperCase(), sure: false);
+    }
+    for (final r in _repaid) {
+      if ((m = r.firstMatch(body)) != null) {
+        return build(m!.group(1), '$bank loan', TxDirection.out, TxCategory.debt,
+            sameAs: sameLoan(TxDirection.out, m.group(1)));
+      }
+    }
+    for (final r in _borrowed) {
+      if ((m = r.firstMatch(body)) != null) {
+        return build(m!.group(1), '$bank loan', TxDirection.inbound, TxCategory.debt,
+            sameAs: sameLoan(TxDirection.inbound, m.group(1)));
+      }
+    }
+    final loan = KeywordCategorizer.mentionsLoan(body);
+    if ((m = _toSavings.firstMatch(body)) != null && _savingsPlace.hasMatch(m!.group(2)!)) {
+      return build(m.group(1), _savingsName(m.group(2)!, bank), TxDirection.out,
+          loan ? TxCategory.debt : TxCategory.savings, channel: TxChannel.other);
+    }
+    if ((m = _fromSavings.firstMatch(body)) != null && _savingsPlace.hasMatch(m!.group(2)!)) {
+      return build(m.group(1), _savingsName(m.group(2)!, bank), TxDirection.inbound,
+          loan ? TxCategory.debt : TxCategory.savings, channel: TxChannel.other);
+    }
+    return null;
+  }
+
+  static String _savingsName(String place, String bank) {
+    final p = place.toLowerCase();
+    if (RegExp(r'kcb m-?pesa').hasMatch(p) || bank == 'KCB M-Pesa') return 'KCB M-Pesa';
+    if (RegExp(r'm-?shwari').hasMatch(p)) return 'M-Shwari';
+    return '$bank savings';
+  }
+
+  static const _names = {
+    'kcbmpesa': 'KCB M-Pesa',
+    'kcb': 'KCB',
+    'equity': 'Equity Bank',
+    'coop': 'Co-op Bank',
+    'ncba': 'NCBA',
+    'absa': 'Absa',
+    'stanbic': 'Stanbic',
+    'imbank': 'I&M Bank',
+    'familybank': 'Family Bank',
+    'dtb': 'DTB',
+    'stanchart': 'Standard Chartered',
+    'standardchartered': 'Standard Chartered',
+    'nationalbank': 'National Bank',
+    'sidian': 'Sidian Bank',
+    'kingdombank': 'Kingdom Bank',
+    'faulu': 'Faulu',
+    'hfgroup': 'HF Group',
+    'gulfbank': 'Gulf African Bank',
+    'creditbank': 'Credit Bank',
+    'primebank': 'Prime Bank',
+  };
+
+  /// A readable bank name for an SMS sender id ("KCB M-PESA" -> "KCB M-Pesa").
+  static String bankName(String sender) {
+    final s = FinancialSenders.normalise(sender);
+    for (final e in _names.entries) {
+      if (s.contains(e.key)) return e.value;
+    }
+    return sender.trim();
+  }
+
+  static DateTime? _date(String body) {
+    int hour(String h, String? ampm) {
+      var v = int.parse(h);
+      if (ampm == null) return v;
+      v %= 12;
+      return ampm.toUpperCase() == 'PM' ? v + 12 : v;
+    }
+
+    final ymd = _ymd.firstMatch(body);
+    if (ymd != null) {
+      final month = int.parse(ymd.group(2)!), day = int.parse(ymd.group(3)!);
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      return DateTime(int.parse(ymd.group(1)!), month, day, hour(ymd.group(4)!, ymd.group(6)), int.parse(ymd.group(5)!));
+    }
+    final dmy = _dmy.firstMatch(body);
+    if (dmy == null) return null;
+    final day = int.parse(dmy.group(1)!), month = int.parse(dmy.group(2)!);
+    var year = int.parse(dmy.group(3)!);
+    if (year < 100) year += 2000;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return DateTime(year, month, day, hour(dmy.group(4)!, dmy.group(6)), int.parse(dmy.group(5)!));
   }
 }

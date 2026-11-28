@@ -44,14 +44,32 @@ abstract final class KeywordCategorizer {
   static final _savingsIn = _r(r'm-?shwari|m-?mali|money market|\bmmf\b|ziidi|\bsacco\b');
   static final _bulk = _r(r'bulk|b2c|disburse');
 
+  /// Places that hold savings and also lend: only the message says which.
+  static final _savesAndLends = _r(r'm-?shwari|kcb m-?pesa');
+  static final _loanWords = _r(r'\bloans?\b(?! limit)|repay|salary advance|overdue');
+
+  /// Whether a message (or merchant) is about a loan rather than savings.
+  static bool mentionsLoan(String text) => _loanWords.hasMatch(text);
+
+  /// Savings or loan for [merchant], from the words in it and its message
+  /// [text]; `null` when nothing says (the AI then reads the message).
+  static TxCategory? _savingsOrLoan(String merchant, String? text) {
+    if (mentionsLoan('$merchant ${text ?? ''}')) return TxCategory.debt;
+    // M-Shwari moves without loan words are savings; KCB M-Pesa is unclear.
+    return _r(r'm-?shwari').hasMatch(merchant) ? TxCategory.savings : null;
+  }
+
   static RegExp _r(String pattern) => RegExp(pattern, caseSensitive: false);
 
-  /// Returns a category, or `null` when the AI should decide.
+  /// Returns a category, or `null` when the AI should decide. [text] is the
+  /// original message, when there is one.
   static TxCategory? categorize({
     required String merchant,
     required TxChannel channel,
     required TxDirection direction,
+    String? text,
   }) {
+    if (_savesAndLends.hasMatch(merchant)) return _savingsOrLoan(merchant, text);
     if (direction == TxDirection.inbound) return _receiving(merchant);
     if (channel == TxChannel.airtime) return TxCategory.airtime;
     for (final entry in _rules.entries) {

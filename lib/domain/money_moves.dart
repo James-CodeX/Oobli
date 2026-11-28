@@ -76,4 +76,52 @@ abstract final class MoneyMoves {
     }
     return moves;
   }
+
+  /// How close a bank's loan repayment and the M-Pesa payment that funded it
+  /// must be.
+  static const loanWindow = Duration(hours: 3);
+
+  /// M-Pesa payments that a bank's own message explains, with their fixed
+  /// copies. Only unconfirmed transactions change.
+  ///
+  /// * A bank credit that carries an M-Pesa send's reference ("received in
+  ///   a/c ... M-PESA Ref X") proves the user topped up their own account:
+  ///   both are own transfers, and certain.
+  /// * A bank loan repayment with a same-amount M-Pesa payment to that bank
+  ///   shortly before: the bank's message is the repayment, so the M-Pesa
+  ///   side only moved the money there. That is a likely answer, so the
+  ///   user is asked.
+  static List<Transaction> explained(Iterable<Transaction> transactions) {
+    final all = transactions.toList();
+    final changed = <String, Transaction>{};
+    final sends = {
+      for (final t in all)
+        if (t.source == TxSource.mpesa && t.isOutgoing && t.reference != null) t.reference!: t,
+    };
+    for (final credit in all) {
+      if (credit.source != TxSource.bank || credit.isOutgoing || credit.category != TxCategory.ownTransfer) continue;
+      final send = sends[credit.reference];
+      if (send == null) continue;
+      for (final t in [credit, send]) {
+        if (!t.confirmed) {
+          changed[t.id] = t.copyWith(category: TxCategory.ownTransfer, aiCategorized: false, confirmed: true);
+        }
+      }
+    }
+    for (final repaid in all) {
+      if (repaid.source != TxSource.bank || !repaid.isOutgoing || repaid.category != TxCategory.debt) continue;
+      final bank = Transaction.merchantKey(repaid.merchant).split(' ').first;
+      if (bank.isEmpty) continue;
+      for (final t in all) {
+        if (t.source != TxSource.mpesa || !t.isOutgoing || t.confirmed) continue;
+        if (t.category == TxCategory.ownTransfer || changed.containsKey(t.id)) continue;
+        if ((t.amount - repaid.amount).abs() > 1) continue;
+        if (t.occurredAt.difference(repaid.occurredAt).abs() > loanWindow) continue;
+        if (!Transaction.merchantKey(t.merchant).split(' ').contains(bank)) continue;
+        changed[t.id] = t.copyWith(category: TxCategory.ownTransfer, aiCategorized: true, confirmed: false);
+        break;
+      }
+    }
+    return changed.values.toList();
+  }
 }

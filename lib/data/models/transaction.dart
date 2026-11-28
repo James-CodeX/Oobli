@@ -47,6 +47,10 @@ class Transaction {
 
   bool get isOutgoing => direction == TxDirection.out;
 
+  /// The category as shown on this transaction: "Loan repaid" rather than
+  /// just "Debt & Loans", because savings and loans move both ways.
+  String get label => category.labelFor(inbound: !isOutgoing);
+
   /// Money that counts as spending (excludes moving money into savings or
   /// between the user's own accounts).
   bool get isSpend => isOutgoing && category != TxCategory.savings && category != TxCategory.ownTransfer;

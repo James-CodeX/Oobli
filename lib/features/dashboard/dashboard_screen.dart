@@ -387,6 +387,7 @@ class _BigOneCard extends ConsumerWidget {
                           CategoryChip(
                             category: cat,
                             selected: false,
+                            inbound: !tx.isOutgoing,
                             onTap: () => _file(context, ref, tx, cat),
                           ),
                         Pressable(
